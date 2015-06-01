@@ -23,16 +23,27 @@
 #include <media_codec.h>
 #include <media_codec_private.h>
 #include <media_codec_port.h>
-//#include <media_codec_port_gst.h> //to avoid build error until this code is not compatible with gstreamer 1.0
+#include <media_codec_port_gst.h>
 
 #include <media_codec_spec_emul.h>
 
-static gboolean _mc_check_is_supported(mc_handle_t* mc_handle, mediacodec_codec_type_e codec_id, mediacodec_support_type_e flags);
+static int sort(gpointer p1, gpointer p2)
+{
+    int a, b;
+
+    a = GPOINTER_TO_INT(p1);
+    b = GPOINTER_TO_INT(p2);
+
+    return (a > b ? 1 : a == b ? 0 : 1);
+}
 
 int mc_create(MMHandleType *mediacodec)
 {
     mc_handle_t* new_mediacodec = NULL;
     int ret = MC_ERROR_NONE;
+    int i;
+    int support_list = sizeof(spec_emul) / sizeof(spec_emul[0]);
+    GList *list = NULL;
 
     /* alloc mediacodec structure */
     new_mediacodec = (mc_handle_t*)g_malloc(sizeof(mc_handle_t));
@@ -47,36 +58,42 @@ int mc_create(MMHandleType *mediacodec)
     new_mediacodec->is_encoder = false;
     new_mediacodec->is_video = false;
     new_mediacodec->is_hw = true;
-    new_mediacodec->is_codec_config = false;
-    new_mediacodec->output_allocated = false;
     new_mediacodec->is_prepared = false;
     new_mediacodec->codec_id = MEDIACODEC_NONE;
 
-    new_mediacodec->gst_ports[0] = NULL;
-    new_mediacodec->gst_ports[1] = NULL;
+    new_mediacodec->ports[0] = NULL;
+    new_mediacodec->ports[1] = NULL;
 
-    new_mediacodec->gst_core = NULL;
-    new_mediacodec->dec_info = NULL;
-    new_mediacodec->enc_info = NULL;
+    new_mediacodec->core = NULL;
 
-    memcpy(new_mediacodec->g_media_codec_spec_emul, spec_emul, sizeof(mc_codec_spec_t)*MC_MAX_NUM_CODEC);
+    for(i=0; i<support_list; i++)
+    {
+        new_mediacodec->supported_codecs = g_list_append(new_mediacodec->supported_codecs, GINT_TO_POINTER(spec_emul[i].codec_id));
+    }
+    new_mediacodec->supported_codecs = g_list_sort(new_mediacodec->supported_codecs, sort);
+
+    gpointer p1;
+    for(i=0; i<support_list; i++)
+    {
+        p1 = g_list_nth_data(list, i);
+        LOGD("list_sort :%d(%x)",i, GPOINTER_TO_INT(p1));
+    }
+
+
+    g_mutex_init(&new_mediacodec->cmd_lock);
 
     *mediacodec = (MMHandleType)new_mediacodec;
 
     return ret;
 
-    // TO DO
 ERROR:
     if ( new_mediacodec )
     {
-        // TO DO
-        // If we need destroy and release for others (cmd, mutex..)
         free(new_mediacodec);
         new_mediacodec = NULL;
-        return MC_INVALID_ARG;
     }
 
-    return ret;
+    return MC_INVALID_ARG;
 }
 
 int mc_destroy(MMHandleType mediacodec)
@@ -90,24 +107,23 @@ int mc_destroy(MMHandleType mediacodec)
         return MC_INVALID_ARG;
     }
 
-    if(mc_handle->gst_core != NULL)
+    MEDIACODEC_CMD_LOCK( mediacodec );
+
+    LOGD("mediacodec : %p", mediacodec);
+
+    if(mc_handle->core != NULL)
     {
-    #if 0 //to avoid build error until this code is not compatible with gstreamer 1.0
-        if(mc_gst_unprepare(mc_handle->gst_core) != MC_ERROR_NONE)
+        if(mc_gst_unprepare(mc_handle) != MC_ERROR_NONE)
         {
             LOGE("mc_gst_unprepare() failed");
             return MC_ERROR;
         }
-	#endif
-       // mc_gst_core_free(mc_handle->gst_core);  //to avoid build error until this code is not compatible with gstreamer 1.0
-        mc_handle->gst_core = NULL;
     }
 
     mc_handle->is_prepared = false;
+    g_list_free(mc_handle->supported_codecs);
 
-    g_free(mc_handle->dec_info);
-    g_free(mc_handle->enc_info);
-
+    MEDIACODEC_CMD_UNLOCK( mediacodec );
 
     /* free mediacodec structure */
     if(mc_handle) {
@@ -121,6 +137,8 @@ int mc_set_codec(MMHandleType mediacodec, mediacodec_codec_type_e codec_id, medi
 {
     int ret = MC_ERROR_NONE;
     mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
+    static const int support_list = sizeof(spec_emul) / sizeof(spec_emul[0]);
+    int i;
 
     if (!mc_handle)
     {
@@ -128,15 +146,27 @@ int mc_set_codec(MMHandleType mediacodec, mediacodec_codec_type_e codec_id, medi
         return MC_INVALID_ARG;
     }
 
-    // Mandatory setting
+    /* Mandatory setting */
     if ( !GET_IS_ENCODER(flags) && !GET_IS_DECODER(flags) )
     {
         LOGE("should be encoder or decoder\n");
         return MC_PARAM_ERROR;
     }
 
-    if(!_mc_check_is_supported(mc_handle, codec_id, flags))
+    for(i = 0; i < support_list; i++)
+    {
+        if((codec_id == spec_emul[i].codec_id) && (flags == spec_emul[i].codec_type))
+        {
+            break;
+        }
+    }
+
+    LOGD("support_list : %d, i : %d", support_list, i);
+
+    if(i == support_list)
         return MC_NOT_SUPPORTED;
+
+    mc_handle->port_type = spec_emul[i].port_type;
 
     mc_handle->is_encoder = GET_IS_ENCODER(flags) ? 1 : 0;
     mc_handle->is_hw = GET_IS_HW(flags) ? 1 : 0;
@@ -147,56 +177,7 @@ int mc_set_codec(MMHandleType mediacodec, mediacodec_codec_type_e codec_id, medi
 
     LOGD("encoder : %d, hardware : %d, codec_id : %x, video : %d",
         mc_handle->is_encoder, mc_handle->is_hw, mc_handle->codec_id, mc_handle->is_video);
-#if 0
-    //  mc_handle->is_omx = use_omx;
-    // !!!! make it dynamic
-    mc_handle->port_type = MEDIACODEC_PORT_TYPE_GST;
 
-    // !!!! only gst case is here. expend it to all.
-    if (encoder)
-    {
-        switch(codec_id)
-        {
-            case MEDIACODEC_H264:
-                mc_handle->supported_codec = GST_ENCODE_H264;
-                mc_handle->mimetype = MEDIA_FORMAT_H264_HP;
-                mc_handle->is_video = 1;
-            break;
-            case MEDIACODEC_AAC:
-                mc_handle->supported_codec = GST_ENCODE_AAC;
-                mc_handle->mimetype = MEDIA_FORMAT_AAC;
-                mc_handle->is_video = 0;
-            break;
-            default:
-                LOGE("NOT SUPPORTED!!!!");
-            break;
-        }
-
-        mc_handle->is_encoder = true;
-    }
-    else
-    {
-        switch(codec_id)
-        {
-            case MEDIACODEC_H264:
-                mc_handle->supported_codec = GST_DECODE_H264;
-                mc_handle->mimetype = MEDIA_FORMAT_NV12;
-                mc_handle->is_video = 1;
-                break;
-            case MEDIACODEC_AAC:
-                mc_handle->supported_codec = GST_DECODE_AAC;
-                mc_handle->mimetype = MEDIA_FORMAT_PCM;
-                mc_handle->is_video = 0;
-                break;
-            default:
-                LOGE("NOT SUPPORTED!!!!");
-            break;
-        }
-
-        // !!!! check if need to be dynamic
-        mc_handle->is_encoder = false;
-    }
-#endif
     return ret;
 }
 
@@ -215,17 +196,29 @@ int mc_set_vdec_info(MMHandleType mediacodec, int width, int height)
         return MC_PARAM_ERROR;
 
     MEDIACODEC_CHECK_CONDITION(mc_handle->codec_id && mc_handle->is_video && !mc_handle->is_encoder,
-            MC_PARAM_ERROR,"MEDIACODEC_ERROR_INVALID_PARAMETER");
+            MEDIACODEC_ERROR_INVALID_PARAMETER,"MEDIACODEC_ERROR_INVALID_PARAMETER");
 
-    if (mc_handle->dec_info == NULL)
-    {
-        mc_handle->dec_info = g_new0(mc_decoder_info_t, 1);
-    }
-
-    mc_handle->dec_info->width = width;
-    mc_handle->dec_info->height = height;
+    mc_handle->info.decoder.width = width;
+    mc_handle->info.decoder.height = height;
 
     mc_handle->is_prepared = true;
+
+    switch ( mc_handle->codec_id )
+    {
+        case MEDIACODEC_H264:
+            mc_sniff_bitstream = mc_sniff_h264_bitstream;
+            LOGD("mc_sniff_h264_bitstream");
+            break;
+        case MEDIACODEC_MPEG4:
+            mc_sniff_bitstream = mc_sniff_mpeg4_bitstream;
+            break;
+        case MEDIACODEC_H263:
+            mc_sniff_bitstream = mc_sniff_h263_bitstream;
+            break;
+        default:
+            LOGE("NOT SUPPORTED!!!!");
+            break;
+    }
 
     return ret;
 }
@@ -245,20 +238,16 @@ int mc_set_venc_info(MMHandleType mediacodec, int width, int height, int fps, in
         return MC_PARAM_ERROR;
 
     MEDIACODEC_CHECK_CONDITION(mc_handle->codec_id && mc_handle->is_video && mc_handle->is_encoder,
-                        MC_PARAM_ERROR, "MEDIACODEC_ERROR_INVALID_PARAMETER");
+                        MEDIACODEC_ERROR_INVALID_PARAMETER, "MEDIACODEC_ERROR_INVALID_PARAMETER");
 
-    if(mc_handle->enc_info == NULL)
-    {
-        mc_handle->enc_info = g_new0(mc_encoder_info_t, 1);
-    }
-
-    mc_handle->enc_info->frame_width = width;
-    mc_handle->enc_info->frame_height = height;
-    mc_handle->enc_info->fps = fps;
-    mc_handle->enc_info->bitrate = target_bits;
+    mc_handle->info.encoder.width = width;
+    mc_handle->info.encoder.height = height;
+    mc_handle->info.encoder.fps = fps;
+    mc_handle->info.encoder.bitrate = target_bits;
 
     mc_handle->is_prepared = true;
 
+    mc_sniff_bitstream = mc_sniff_yuv;
     return ret;
 }
 
@@ -277,16 +266,11 @@ int mc_set_adec_info(MMHandleType mediacodec, int samplerate, int channel, int b
         return MC_PARAM_ERROR;
 
     MEDIACODEC_CHECK_CONDITION(mc_handle->codec_id && !mc_handle->is_video && !mc_handle->is_encoder,
-            MC_PARAM_ERROR, "MEDIACODEC_ERROR_INVALID_PARAMETER");
+            MEDIACODEC_ERROR_INVALID_PARAMETER, "MEDIACODEC_ERROR_INVALID_PARAMETER");
 
-    if (mc_handle->dec_info == NULL)
-    {
-        mc_handle->dec_info = g_new0(mc_decoder_info_t, 1);
-    }
-
-    mc_handle->dec_info->samplerate = samplerate;
-    mc_handle->dec_info->channel = channel;
-    mc_handle->dec_info->bit = bit;
+    mc_handle->info.decoder.samplerate = samplerate;
+    mc_handle->info.decoder.channel = channel;
+    mc_handle->info.decoder.bit = bit;
 
     mc_handle->is_prepared = true;
 
@@ -308,17 +292,12 @@ int mc_set_aenc_info(MMHandleType mediacodec, int samplerate, int channel, int b
         return MC_PARAM_ERROR;
 
     MEDIACODEC_CHECK_CONDITION(mc_handle->codec_id && !mc_handle->is_video && mc_handle->is_encoder,
-                        MC_PARAM_ERROR, "MEDIACODEC_ERROR_INVALID_PARAMETER");
+                        MEDIACODEC_ERROR_INVALID_PARAMETER, "MEDIACODEC_ERROR_INVALID_PARAMETER");
 
-    if(mc_handle->enc_info == NULL)
-    {
-        mc_handle->enc_info = g_new0(mc_encoder_info_t, 1);
-    }
-
-    mc_handle->enc_info->samplerate = samplerate;
-    mc_handle->enc_info->channel = channel;
-    mc_handle->enc_info->bit = bit;
-    mc_handle->enc_info->bitrate = bitrate;
+    mc_handle->info.encoder.samplerate = samplerate;
+    mc_handle->info.encoder.channel = channel;
+    mc_handle->info.encoder.bit = bit;
+    mc_handle->info.encoder.bitrate = bitrate;
 
     mc_handle->is_prepared = true;
 
@@ -328,9 +307,7 @@ int mc_set_aenc_info(MMHandleType mediacodec, int samplerate, int channel, int b
 int mc_prepare(MMHandleType mediacodec)
 {
     int ret = MC_ERROR_NONE;
-#if 0 //to avoid build error until this code is not compatible with gstreamer 1.0	
     mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
-    media_format_mimetype_e mimetype;
 
     if (!mc_handle)
     {
@@ -341,172 +318,32 @@ int mc_prepare(MMHandleType mediacodec)
     if(!mc_handle->is_prepared)
         return MC_NOT_INITIALIZED;
 
+    MEDIACODEC_CMD_LOCK( mediacodec );
+
     /* setting core details */
     switch ( mc_handle->port_type )
     {
         case MEDIACODEC_PORT_TYPE_GENERAL:
         {
-            /*
-            //!!!! need to set data to omx/gen core need to seperate
-            mc_handle->gen_core->output_fmt = mc_handle->output_fmt;
-            mc_handle->gen_core->encoder = mc_handle->is_encoder;
-
-            if(mc_handle->is_encoder)
-            {
-            mc_encoder_info_t *info;
-
-            info = mc_handle->enc_info;
-            mc_handle->gen_core->enc_info = mc_handle->enc_info;
-
-            media_format_set_video_info(mc_handle->output_fmt, mc_handle->mimetype, info->frame_width, info->frame_height, info->bitrate, 0);
-            }
-            else
-            {
-            mc_decoder_info_t *info;
-
-            info = mc_handle->dec_info;
-            mc_handle->gen_core->dec_info = mc_handle->dec_info;
-            media_format_set_video_info(mc_handle->output_fmt, mc_handle->mimetype, info->width, info->height, 0, 0);
-            }
-
-            ret = mc_general_init(mc_handle->gen_core);
-            */
         }
         break;
 
         case MEDIACODEC_PORT_TYPE_OMX:
         {
-            //et = mc_omx_init(mc_handle);
-            //ret = mc_omx_create_handle(mc_handle);
         }
         break;
 
         case MEDIACODEC_PORT_TYPE_GST:
         {
-
-            int i;
-            int codec_list;
-            static const mc_codec_map_t *codec_map;
-
-            mc_gst_core_t* new_core = mc_gst_core_new();  
-            // !!!! null check
-
-            new_core->encoder = mc_handle->is_encoder;
-            new_core->is_hw = mc_handle->is_hw;
-            new_core->video = mc_handle->is_video;
-            new_core->codec_id = mc_handle->codec_id;
-
-            /* setting internal callbacks */
-            for (i = 0; i < _MEDIACODEC_EVENT_TYPE_INTERNAL_FILLBUFFER ; i++)
-            {
-                LOGD("copy cb function [%d]", i);
-                if (mc_handle->user_cb[i])
-                {
-                    new_core->user_cb[i] = mc_handle->user_cb[i];
-                    new_core->user_data[i] = mc_handle->user_data[i];
-                    LOGD("user_cb[%d] %p, %p", i, new_core->user_cb[i], mc_handle->user_cb[i]);
-                }
-            }
-
-            if(new_core->output_fmt == NULL)
-            {
-                if(media_format_create(&new_core->output_fmt) != MEDIA_FORMAT_ERROR_NONE)
-                {
-                    LOGE("media format create failed");
-                }
-                LOGD("pkt_fmt is allocated");
-            }
-
-            if(new_core->encoder)
-            {
-                codec_list = sizeof(encoder_map) / sizeof(encoder_map[0]);
-                codec_map = encoder_map;
-            }
-            else
-            {
-                codec_list = sizeof(decoder_map) / sizeof(decoder_map[0]);
-                codec_map = decoder_map;
-            }
-
-            for(i = 0; i < codec_list; i++)
-            {
-                if((new_core->codec_id == codec_map[i].id) && (new_core->is_hw == codec_map[i].hardware))
-                    break;
-            }
-
-            new_core->factory_name = codec_map[i].type.factory_name;
-
-            mimetype = codec_map[i].type.out_format;
-
-            new_core->mime = codec_map[i].type.mime;
-
-            LOGD("factory name : %s, output_fmt : %x mime : %s", new_core->factory_name, mimetype, new_core->mime);
-
-            if(new_core->factory_name == NULL || mimetype == MEDIA_FORMAT_MAX)
-            {
-                LOGE("Cannot find output format");
-                return MC_NOT_SUPPORTED;
-            }
-
-            if(mc_handle->is_encoder)
-            {
-                mc_encoder_info_t *info;
-
-                info = mc_handle->enc_info;
-                new_core->enc_info = mc_handle->enc_info;
-
-                if (new_core->video)
-                {
-                    media_format_set_video_mime(new_core->output_fmt, mimetype);
-                    media_format_set_video_width(new_core->output_fmt, info->frame_width);
-                    media_format_set_video_height(new_core->output_fmt, info->frame_height);
-                    media_format_set_video_avg_bps(new_core->output_fmt, info->bitrate);
-                }
-                else
-                {
-                    media_format_set_audio_mime(new_core->output_fmt, mimetype);
-                    media_format_set_audio_channel(new_core->output_fmt, info->channel);
-                    media_format_set_audio_samplerate(new_core->output_fmt, info->samplerate);
-                    media_format_set_audio_bit(new_core->output_fmt, info->bit);
-                    media_format_set_audio_avg_bps(new_core->output_fmt, info->bitrate);
-                }
-
-            }
-            else
-            {
-                mc_decoder_info_t *info;
-
-                info = mc_handle->dec_info;
-                new_core->dec_info = mc_handle->dec_info;
-                if (new_core->video)
-                {
-                    media_format_set_video_mime(new_core->output_fmt, mimetype);
-                    media_format_set_video_width(new_core->output_fmt, info->width);
-                    media_format_set_video_height(new_core->output_fmt, info->height);
-                }
-                else
-                {
-                    media_format_set_audio_mime(new_core->output_fmt, mimetype);
-                    media_format_set_audio_channel(new_core->output_fmt, info->channel);
-                    media_format_set_audio_samplerate(new_core->output_fmt, info->samplerate);
-                    media_format_set_audio_bit(new_core->output_fmt, info->bit);
-                }
-
-            }
-
-            LOGD("is_encoder (%d)  is_video (%d)",  new_core->encoder, new_core->video);
-            mc_handle->gst_core = new_core;
-            //mc_gst_prepare(mc_handle->gst_core); //to avoid build error until this code is not compatible with gstreamer 1.0
-
-
-		}
-
+            mc_gst_prepare(mc_handle);
+        }
         break;
 
         default:
         break;
     }
-#endif
+
+    MEDIACODEC_CMD_UNLOCK( mediacodec );
 
     return ret;
 }
@@ -522,36 +359,32 @@ int mc_unprepare(MMHandleType mediacodec)
         return MC_INVALID_ARG;
     }
 
+    MEDIACODEC_CMD_LOCK( mediacodec );
+
     /* deinit core details */
     switch ( mc_handle->port_type )
     {
         case MEDIACODEC_PORT_TYPE_GENERAL:
         {
-            //ret = mc_general_deinit(mc_handle->gen_core);
         }
         break;
 
         case MEDIACODEC_PORT_TYPE_OMX:
         {
-            //ret = mc_omx_deinit(mc_handle);
         }
         break;
 
         case MEDIACODEC_PORT_TYPE_GST:
         {
-         //   ret = mc_gst_unprepare(mc_handle->gst_core);  //to avoid build error until this code is not compatible with gstreamer 1.0
-
-            if(mc_handle->gst_core != NULL)
-            {
-              //  mc_gst_core_free(mc_handle->gst_core);  //to avoid build error until this code is not compatible with gstreamer 1.0
-                mc_handle->gst_core = NULL;
-            }
+            ret = mc_gst_unprepare(mc_handle);
         }
         break;
 
         default:
             break;
     }
+
+    MEDIACODEC_CMD_UNLOCK( mediacodec );
 
     return ret;
 }
@@ -561,22 +394,29 @@ int mc_process_input(MMHandleType mediacodec, media_packet_h inbuf, uint64_t tim
     int ret = MC_ERROR_NONE;
     uint64_t buf_size = 0;
     void *buf_data = NULL;
+    bool eos = false;
 
     mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
 
 
-    if (!mc_handle)
-    {
+    if (!mc_handle) {
         LOGE("fail invaild param\n");
         return MC_INVALID_ARG;
     }
-
+#if 1
+    if ( mc_handle->is_video) {
+        if ((ret = mc_sniff_bitstream(mc_handle, inbuf)) != MC_ERROR_NONE ) {
+            return MC_INVALID_IN_BUF;
+        }
+    }
+#else
     ret = media_packet_get_buffer_size(inbuf, &buf_size);
     if (ret != MEDIA_PACKET_ERROR_NONE)
     {
         LOGE("invaild input buffer");
         return MC_INVALID_IN_BUF;
     }
+
     ret = media_packet_get_buffer_data_ptr(inbuf, &buf_data);
     if (ret != MEDIA_PACKET_ERROR_NONE)
     {
@@ -584,35 +424,43 @@ int mc_process_input(MMHandleType mediacodec, media_packet_h inbuf, uint64_t tim
         return MC_INVALID_IN_BUF;
     }
 
-    if((buf_data == NULL) || (buf_size == 0))
+    ret = media_packet_is_end_of_stream(inbuf, &eos);
+    if (ret != MEDIA_PACKET_ERROR_NONE)
     {
         LOGE("invaild input buffer");
         return MC_INVALID_IN_BUF;
     }
 
+    if(!eos)
+    {
+        if((buf_data == NULL) || (buf_size == 0))
+        {
+            LOGE("invaild input buffer");
+            return MC_INVALID_IN_BUF;
+        }
+    }
+#endif
+    MEDIACODEC_CMD_LOCK( mediacodec );
+
     switch ( mc_handle->port_type )
     {
         case MEDIACODEC_PORT_TYPE_GENERAL:
-        {
-             //ret = mc_general_process_input(mc_handle->gen_core, inbuf, timeOutUs);
-        }
         break;
 
         case MEDIACODEC_PORT_TYPE_OMX:
-        {
-            //ret = mc_omx_process_input(mc_handle, inbuf, timeOutUs);
-        }
         break;
 
         case MEDIACODEC_PORT_TYPE_GST:
         {
-            //ret = mc_gst_process_input(mc_handle->gst_core, inbuf, timeOutUs); //to avoid build error until this code is not compatible with gstreamer 1.0
+            ret = mc_gst_process_input(mc_handle, inbuf, timeOutUs);
         }
         break;
 
         default:
             break;
     }
+
+    MEDIACODEC_CMD_UNLOCK( mediacodec );
 
     return ret;
 }
@@ -628,29 +476,98 @@ int mc_get_output(MMHandleType mediacodec, media_packet_h *outbuf, uint64_t time
         return MC_INVALID_ARG;
     }
 
+    MEDIACODEC_CMD_LOCK( mediacodec );
+
     /* setting core details */
     switch ( mc_handle->port_type )
     {
         case MEDIACODEC_PORT_TYPE_GENERAL:
-        {
-            //ret= mc_general_get_output(mc_handle->gen_core, outbuf, timeOutUs);
-        }
         break;
 
         case MEDIACODEC_PORT_TYPE_OMX:
-        {
-            //ret = mc_omx_get_output(mc_handle, outbuf, timeOutUs);
-        }
         break;
 
         case MEDIACODEC_PORT_TYPE_GST:
         {
-            //ret = mc_gst_get_output(mc_handle->gst_core, outbuf, timeOutUs); //to avoid build error until this code is not compatible with gstreamer 1.0
+            ret = mc_gst_get_output(mc_handle, outbuf, timeOutUs);
         }
         break;
 
         default:
             break;
+    }
+
+    MEDIACODEC_CMD_UNLOCK( mediacodec );
+
+    return ret;
+}
+
+int mc_flush_buffers(MMHandleType mediacodec)
+{
+    int ret = MC_ERROR_NONE;
+    mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
+
+    if (!mc_handle)
+    {
+        LOGE("fail invaild param\n");
+        return MC_INVALID_ARG;
+    }
+
+    MEDIACODEC_CMD_LOCK( mediacodec );
+
+    /* setting core details */
+    switch ( mc_handle->port_type )
+    {
+        case MEDIACODEC_PORT_TYPE_GENERAL:
+        break;
+
+        case MEDIACODEC_PORT_TYPE_OMX:
+        break;
+
+        case MEDIACODEC_PORT_TYPE_GST:
+        {
+            ret = mc_gst_flush_buffers(mc_handle);
+        }
+        break;
+
+        default:
+            break;
+    }
+
+    MEDIACODEC_CMD_UNLOCK( mediacodec );
+    return ret;
+}
+
+int mc_get_supported_type(MMHandleType mediacodec, mediacodec_codec_type_e codec_type, bool encoder, int *support_type)
+{
+    int ret = MC_ERROR_NONE;
+    mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
+    static const mc_codec_map_t *codec_map;
+    int i;
+
+    *support_type = 0;
+
+    if (!mc_handle)
+    {
+        LOGE("fail invaild param\n");
+        return MC_INVALID_ARG;
+    }
+
+    const int codec_list = encoder ? (sizeof(encoder_map) / sizeof(encoder_map[0])) : (sizeof(decoder_map) / sizeof(decoder_map[0]));
+
+    codec_map = encoder ? encoder_map : decoder_map;
+
+
+    for(i = 0; i < codec_list; i++)
+    {
+        if(codec_type == codec_map[i].id)
+        {
+            if(codec_map[i].hardware)
+                *support_type |=MEDIACODEC_SUPPORT_TYPE_HW;
+            else
+                *support_type |=MEDIACODEC_SUPPORT_TYPE_SW;
+        }
+
     }
 
     return ret;
@@ -688,6 +605,7 @@ int mc_set_empty_buffer_cb(MMHandleType mediacodec, mediacodec_input_buffer_used
 
     return ret;
 }
+
 int mc_unset_empty_buffer_cb(MMHandleType mediacodec)
 {
     mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
@@ -735,6 +653,7 @@ int mc_set_fill_buffer_cb(MMHandleType mediacodec, mediacodec_output_buffer_avai
 
     return ret;
 }
+
 int mc_unset_fill_buffer_cb(MMHandleType mediacodec)
 {
     mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
@@ -847,33 +766,197 @@ int mc_unset_eos_cb(MMHandleType mediacodec)
     return MC_ERROR_NONE;
 }
 
-gboolean _mc_check_is_supported(mc_handle_t* mc_handle, mediacodec_codec_type_e codec_id, mediacodec_support_type_e flags)
+int mc_set_buffer_status_cb(MMHandleType mediacodec, mediacodec_buffer_status_cb callback, void* user_data)
 {
-    int i=0;
+    int ret = MC_ERROR_NONE;
+    mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
 
     if (!mc_handle)
     {
         LOGE("fail invaild param\n");
-        return FALSE;
+        return MC_INVALID_ARG;
     }
 
-    for (i = 0; i < MC_MAX_NUM_CODEC; i++)
+    if(mc_handle->user_cb[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS])
     {
-        if (mc_handle->g_media_codec_spec_emul[i].mime == codec_id)
+        LOGE("Already set mediacodec_need_data_cb\n");
+        return MC_PARAM_ERROR;
+    }
+    else
+    {
+        if (!callback) {
+            return MC_INVALID_ARG;
+        }
+
+        LOGD("Set start feed callback(cb = %p, data = %p)\n", callback, user_data);
+
+        mc_handle->user_cb[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS] = (mc_buffer_status_cb) callback;
+        mc_handle->user_data[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS] = user_data;
+        return MC_ERROR_NONE;
+    }
+
+    return ret;
+}
+
+int mc_unset_buffer_status_cb(MMHandleType mediacodec)
+{
+    mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
+
+    if (!mc_handle)
+    {
+        LOGE("fail invaild param\n");
+        return MC_INVALID_ARG;
+    }
+
+    mc_handle->user_cb[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS] = NULL;
+    mc_handle->user_data[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS] = NULL;
+
+    return MC_ERROR_NONE;
+}
+
+int mc_set_supported_codec_cb(MMHandleType mediacodec, mediacodec_supported_codec_cb callback, void* user_data)
+{
+    int ret = MC_ERROR_NONE;
+    mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
+
+    if (!mc_handle)
+    {
+        LOGE("fail invaild param\n");
+        return MC_INVALID_ARG;
+    }
+
+    if(mc_handle->user_cb[_MEDIACODEC_EVENT_TYPE_SUPPORTED_CODEC])
+    {
+        LOGE("Already set mediacodec_supported_codec_cb\n");
+        return MC_PARAM_ERROR;
+    }
+    else
+    {
+        if (!callback) {
+            return MC_INVALID_ARG;
+        }
+
+        LOGD("Set event handler callback(cb = %p, data = %p)\n", callback, user_data);
+
+        mc_handle->user_cb[_MEDIACODEC_EVENT_TYPE_SUPPORTED_CODEC] = (mc_supported_codec_cb) callback;
+        mc_handle->user_data[_MEDIACODEC_EVENT_TYPE_SUPPORTED_CODEC] = user_data;
+        return MC_ERROR_NONE;
+    }
+
+    return MC_ERROR_NONE;
+}
+
+int _mediacodec_foreach_supported_codec(MMHandleType mediacodec, mediacodec_supported_codec_cb callback, void* user_data)
+{
+    int ret = MC_ERROR_NONE;
+    mc_handle_t* mc_handle = (mc_handle_t*) mediacodec;
+    int codecs_num;
+    gpointer tmp;
+
+    if (!mc_handle)
+    {
+        LOGE("fail invaild param\n");
+        return MC_INVALID_ARG;
+    }
+
+    if(mc_handle->supported_codecs)
+    {
+        codecs_num = g_list_length(mc_handle->supported_codecs);
+        LOGD("supported_codecs : %d", codecs_num);
+
+        while(codecs_num)
         {
-            if (mc_handle->g_media_codec_spec_emul[i].codec_type & (flags & 0x3))
+            tmp = g_list_nth_data(mc_handle->supported_codecs, codecs_num -1);
+            if(tmp)
             {
-                if (mc_handle->g_media_codec_spec_emul[i].support_type & (flags & 0xC))
+                if(!callback(GPOINTER_TO_INT(tmp), user_data))
                 {
-                    mc_handle->port_type = mc_handle->g_media_codec_spec_emul[i].port_type;
-                    LOGD("port type : %d", mc_handle->port_type);
-                    return TRUE;
+                    ret = MEDIACODEC_ERROR_INTERNAL;
+                    goto CALLBACK_ERROR;
                 }
             }
+            codecs_num--;
+        }
 
+        if(!callback(-1, user_data))
+        {
+            ret = MEDIACODEC_ERROR_INTERNAL;
+            goto CALLBACK_ERROR;
         }
     }
 
-	return FALSE;
+CALLBACK_ERROR:
+    LOGD("foreach callback returned error");
+    return ret;
+}
+
+int mc_sniff_h264_bitstream(mc_handle_t *handle, media_packet_h pkt)
+{
+    int ret = MC_ERROR_NONE;
+    void *buf_data = NULL;
+    void *codec_data = NULL;
+    int codec_data_size = 0;
+    uint64_t buf_size = 0;
+    bool eos = false;
+    bool codec_config = false;
+
+    media_packet_get_buffer_size(pkt, &buf_size);
+    media_packet_get_buffer_data_ptr(pkt, &buf_data);
+    media_packet_get_codec_data(pkt, &codec_data, &codec_data_size);
+    media_packet_is_end_of_stream(pkt, &eos);
+    media_packet_is_codec_config(pkt, &codec_config);
+
+    LOGD("codec_data_size : %d, buf_size : %d, codec_config : %d, eos : %d",
+        codec_data_size, (int)buf_size, codec_config, eos);
+
+    if ( codec_config ) {
+        if ( codec_data_size == 0 )
+          ret = _mc_check_bytestream (pkt, buf_data, (int)buf_size, NULL, NULL);
+    }
+
+    return ret;
+}
+
+int mc_sniff_mpeg4_bitstream(mc_handle_t *handle, media_packet_h pkt)
+{
+    int ret = MC_ERROR_NONE;
+    return ret;
+}
+
+int mc_sniff_h263_bitstream(mc_handle_t *handle, media_packet_h pkt)
+{
+    int ret = MC_ERROR_NONE;
+    return ret;
+}
+
+int mc_sniff_yuv(mc_handle_t *handle, media_packet_h pkt)
+{
+    int ret = MC_ERROR_NONE;
+
+#if 0 /* libtbm, media-tool should be updated */
+    uint64_t buf_size = 0;
+    int plane_num = 0;
+    int padded_width = 0;
+    int padded_height = 0;
+    int allocated_buffer = 0;
+    int index;
+
+    media_packet_get_buffer_size(pkt, &buf_size);
+    media_packet_get_video_number_of_planes(pkt, &plane_num);
+
+    for ( index = 0; index < plane_num; index++) {
+        media_packet_get_video_stride_width(pkt, index, &padded_width);
+        media_packet_get_video_stride_height(pkt, index, &padded_height);
+        allocated_buffer += padded_width * padded_height;
+
+        LOGD("%d plane size : %d", padded_width * padded_height);
+    }
+
+    if ( buf_size > allocated_buffer ) {
+        LOGE("Buffer exceeds maximum size [buf_size: %d, allocated_size :%d", (int)buf_size, allocated_buffer);
+        ret = MC_INVALID_IN_BUF;
+    }
+#endif
+    return ret;
 }
 

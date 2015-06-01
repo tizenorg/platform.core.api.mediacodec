@@ -1,6 +1,6 @@
 Name:       capi-media-codec
 Summary:    A Media Codec library in Tizen Native API
-Version:    0.1.1
+Version:    0.4.0
 Release:    0
 Group:      Multimedia/API
 License:    Apache-2.0
@@ -17,26 +17,34 @@ BuildRequires:  pkgconfig(gstreamer-1.0)
 BuildRequires:  pkgconfig(gstreamer-plugins-base-1.0)
 BuildRequires:  pkgconfig(gstreamer-app-1.0)
 BuildRequires:  pkgconfig(libdri2)
-
+BuildRequires:  pkgconfig(capi-system-info)
+%if "%{?tizen_target_name}"=="Z130H"
+#!BuildIgnore:  kernel-headers
+BuildConflicts: linux-glibc-devel
+BuildRequires:  kernel-headers-tizen-dev
+%endif
 Requires(post): /sbin/ldconfig
 Requires(post): libprivilege-control
 Requires(postun): /sbin/ldconfig
 
 %description
-A Media Player library in Tizen Native API
+
 
 %package devel
 Summary:  A Media Player library in Tizen Native API (Development)
-Group:    Multimedia/API
+Group:    TO_BE/FILLED_IN
 Requires: %{name} = %{version}-%{release}
 
 %description devel
-%devel_desc
+
 %prep
 %setup -q
 
 
 %build
+%if "%{?tizen_target_name}"=="Z130H"
+export CFLAGS="$CFLAGS -DZ130H"
+%endif
 %if 0%{?sec_build_binary_debug_enable}
 export CFLAGS="$CFLAGS -DTIZEN_DEBUG_ENABLE"
 export CXXFLAGS="$CXXFLAGS -DTIZEN_DEBUG_ENABLE"

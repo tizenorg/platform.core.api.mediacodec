@@ -10,7 +10,7 @@ SET(PREFIX ${CMAKE_INSTALL_PREFIX})
 SET(INC_DIR include)
 INCLUDE_DIRECTORIES(${INC_DIR})
 
-SET(dependents "dlog glib-2.0 mm-common capi-media-tool libtbm libdri2 gstreamer-1.0 gstreamer-plugins-base-1.0 gstreamer-app-1.0" )
+SET(dependents "dlog glib-2.0 mm-common libtbm libdri2 capi-media-tool gstreamer-1.0 gstreamer-plugins-base-1.0 gstreamer-app-1.0 capi-system-info" )
 SET(pc_dependents "capi-base-common capi-media-tool gstreamer-1.0 gstreamer-plugins-base-1.0 gstreamer-app-1.0" )
 
 INCLUDE(FindPkgConfig)
@@ -19,7 +19,7 @@ FOREACH(flag ${${fw_name}_CFLAGS})
     SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
 ENDFOREACH(flag)
 
-SET(CMAKE_C_FLAGS "-I./include -I./include/headers ${CMAKE_C_FLAGS} ${EXTRA_CFLAGS} -fPIC -Wall -Werror")
+SET(CMAKE_C_FLAGS "-I./include -I./include/headers ${CMAKE_C_FLAGS} ${EXTRA_CFLAGS} -fPIC -Wall")
 SET(CMAKE_C_FLAGS_DEBUG "-O0 -g")
 
 IF("${ARCH}" STREQUAL "arm")

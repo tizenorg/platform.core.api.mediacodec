@@ -24,6 +24,7 @@
 
 #include <media_codec.h>
 #include <media_codec_queue.h>
+#include <media_codec_bitstream.h>
 #include <media_codec_spec_emul.h>
 
 
@@ -36,7 +37,6 @@
 /*---------------------------------------------------------------------------
 |    GLOBAL #defines:                                                                                                                    |
 ---------------------------------------------------------------------------*/
-#define OUT_BUF_SIZE    9000000
 #define CHECK_BIT(x, y) (((x) >> (y)) & 0x01)
 #define GET_IS_ENCODER(x) CHECK_BIT(x, 0)
 #define GET_IS_DECODER(x) CHECK_BIT(x, 1)
@@ -46,6 +46,13 @@
 //#define GET_IS_OMX(x) CHECK_BIT(x, 4)
 //#define GET_IS_GEN(x) CHECK_BIT(x, 5)
 
+#if 1
+#define MEDIACODEC_FENTER();
+#define MEDIACODEC_FLEAVE();
+#else
+#define MEDIACODEC_FENTER();          LOGW("%s Enter",__FUNCTION__);
+#define MEDIACODEC_FLEAVE();          LOGW("%s Exit",__FUNCTION__);
+#endif
 
 /*---------------------------------------------------------------------------
 |    GLOBAL CONSTANT DEFINITIONS:                                                                                          |
@@ -88,20 +95,28 @@ typedef enum
  * @see mediacodec_unset_dequeue_input_buffer_cb()
  */
 
+
 typedef struct _mc_decoder_info_t mc_decoder_info_t;
 typedef struct _mc_encoder_info_t mc_encoder_info_t;
-
 typedef struct _mc_handle_t mc_handle_t;
 
-/* gst port layer */
-typedef struct _mc_gst_port_t mc_gst_port_t;
-typedef struct _mc_gst_core_t mc_gst_core_t;
+#define MEDIACODEC_CMD_LOCK(x_mediacodec) g_mutex_lock(&((mc_handle_t*)x_mediacodec)->cmd_lock )
+#define MEDIACODEC_CMD_UNLOCK(x_mediacodec) g_mutex_unlock( &((mc_handle_t*)x_mediacodec)->cmd_lock )
 
 typedef void (*mc_dequeue_input_buffer_cb)(media_packet_h pkt, void *user_data);
 typedef void (*mc_empty_buffer_cb)(media_packet_h pkt, void *user_data);
 typedef void (*mc_fill_buffer_cb)(media_packet_h pkt, void *user_data);
 typedef void (*mc_error_cb)(mediacodec_error_e error, void *user_data);
 typedef void (*mc_eos_cb)(void *user_data);
+typedef void (*mc_buffer_status_cb)(mediacodec_status_e status, void *user_data);
+typedef void (*mc_supported_codec_cb)(mediacodec_codec_type_e codec_type, void *user_data);
+
+int (*mc_sniff_bitstream)(mc_handle_t *handle, media_packet_h pkt);
+
+int mc_sniff_h264_bitstream(mc_handle_t *handle, media_packet_h pkt);
+int mc_sniff_mpeg4_bitstream(mc_handle_t *handle, media_packet_h pkt);
+int mc_sniff_h263_bitstream(mc_handle_t *handle, media_packet_h pkt);
+int mc_sniff_yuv(mc_handle_t *handle, media_packet_h pkt);
 
 typedef enum {
     _MEDIACODEC_EVENT_TYPE_COMPLETE,
@@ -109,7 +124,9 @@ typedef enum {
     _MEDIACODEC_EVENT_TYPE_FILLBUFFER,
     _MEDIACODEC_EVENT_TYPE_ERROR,
     _MEDIACODEC_EVENT_TYPE_EOS,
+    _MEDIACODEC_EVENT_TYPE_BUFFER_STATUS,
     _MEDIACODEC_EVENT_TYPE_INTERNAL_FILLBUFFER,
+    _MEDIACODEC_EVENT_TYPE_SUPPORTED_CODEC,
     _MEDIACODEC_EVENT_TYPE_NUM
 } _mediacodec_event_e;
 
@@ -121,6 +138,15 @@ typedef enum _mc_codec_port_type_e
 	CODEC_PORT_TYPE_GST,
 	CODEC_PORT_TYPE_MAX,
 } mc_codec_port_type_e;
+
+typedef enum _mc_vendor_e
+{
+    MC_VENDOR_DEFAULT,
+    MC_VENDOR_SLSI_SEC,
+    MC_VENDOR_SLSI_EXYNOS,
+    MC_VENDOR_QCT,
+    MC_VENDOR_SPRD
+} mc_vendor_e;
 
 struct _mc_decoder_info_t
 {
@@ -136,9 +162,10 @@ struct _mc_decoder_info_t
 
 struct _mc_encoder_info_t
 {
-    int frame_width;
-    int frame_height;
+    int width;
+    int height;
     int bitrate;
+    int format;
     int fps;
     int qp_min;
     int qp_max;
@@ -151,89 +178,34 @@ struct _mc_encoder_info_t
     int bit;
 };
 
-struct _mc_gst_port_t
-{
-    mc_gst_core_t *core;
-    unsigned int num_buffers;
-    unsigned int buffer_size;
-    unsigned int index;
-    bool is_allocated;
-    media_packet_h *buffers;
-    //GSem
-    GQueue *queue;
-    GMutex *mutex;
-    GCond *buffer_cond;
-};
-
-struct _mc_gst_core_t
-{
-    GstState state;
-    bool output_allocated;
-    bool encoder;
-    bool video;
-    bool is_hw;
-
-    mediacodec_codec_type_e codec_id;
-    media_format_h output_fmt;
-    mc_gst_port_t *ports[2];
-
-    /* gst stuffs */
-    GstElement* pipeline;
-    GstElement* appsrc;
-    GstElement* converter;
-    GstElement* fakesink;
-    GstElement* codec;
-
-    gulong signal_handoff;
-    gint bus_whatch_id;
-
-    mc_aqueue_t *available_queue;
-    GQueue *output_queue;
-
-    mc_decoder_info_t *dec_info;
-    mc_encoder_info_t *enc_info;
-
-    void* user_cb[_MEDIACODEC_EVENT_TYPE_NUM];
-    void* user_data[_MEDIACODEC_EVENT_TYPE_NUM];
-
-    gchar *factory_name;
-    gchar *mime;
-};
-
 /* Codec Private data */
 struct _mc_handle_t
 {
-    void *hcodec;                               /**< codec handle */
     int state;                                  /**<  mc current state */
-    mediacodec_port_type_e port_type;
     bool is_encoder;
     bool is_video;
     bool is_hw;
-    bool is_codec_config;                           /** < codec config data for first frame(SPS - using in AVC) */
-    bool output_allocated;
     bool is_prepared;
 
-    int frame_count;
-    int out_buf_cnt;
-    int *out_buf_ref;
-
+    GList *supported_codecs;
+    GMutex cmd_lock;
+    mediacodec_port_type_e port_type;
     mediacodec_codec_type_e codec_id;
+    mc_vendor_e vendor;
 
-    /* for gst port */
-    mc_gst_port_t *gst_ports[2];
-    mc_gst_core_t *gst_core;
+    void *ports[2];
+    void *core;
 
-    /* for Decoder */
-    mc_decoder_info_t *dec_info;
-
-    /* for Encoder */
-    mc_encoder_info_t *enc_info;
+    union
+    {
+        mc_decoder_info_t decoder;
+        mc_encoder_info_t encoder;
+    } info;
 
     /* for process done cb */
     void* user_cb[_MEDIACODEC_EVENT_TYPE_NUM];
     void* user_data[_MEDIACODEC_EVENT_TYPE_NUM];
 
-    mc_codec_spec_t g_media_codec_spec_emul[MC_MAX_NUM_CODEC];
 };
 
 /*===========================================================================================
@@ -259,10 +231,12 @@ int mc_set_aenc_info(MMHandleType mediacodec, int samplerate, int channel, int b
 
 int mc_prepare(MMHandleType mediacodec);
 int mc_unprepare(MMHandleType mediacodec);
-int mc_reset(MMHandleType mediacodec);
 
 int mc_process_input(MMHandleType mediacodec, media_packet_h inbuf, uint64_t timeOutUs);
 int mc_get_output(MMHandleType mediacodec, media_packet_h *outbuf, uint64_t timeOutUs);
+
+int mc_flush_buffers(MMHandleType mediacodec);
+int mc_get_supported_type(MMHandleType mediacodec, mediacodec_codec_type_e codec_type, bool encoder, int *support_type);
 
 int mc_set_empty_buffer_cb(MMHandleType mediacodec, mediacodec_input_buffer_used_cb callback, void* user_data);
 int mc_unset_empty_buffer_cb(MMHandleType mediacodec);
@@ -275,6 +249,10 @@ int mc_unset_error_cb(MMHandleType mediacodec);
 
 int mc_set_eos_cb(MMHandleType mediacodec, mediacodec_eos_cb callback, void* user_data);
 int mc_unset_eos_cb(MMHandleType mediacodec);
+
+int mc_set_need_data_cb(MMHandleType mediacodec, mediacodec_buffer_status_cb callback, void* user_data);
+int mc_unset_need_data_cb(MMHandleType mediacodec);
+
 
 #ifdef __cplusplus
 }

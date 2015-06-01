@@ -20,6 +20,7 @@
 #include <media_codec.h>
 #include <media_codec_private.h>
 #include <media_codec_port.h>
+#include <system_info.h>
 
 #include <dlog.h>
 
@@ -27,6 +28,10 @@ static gboolean  __mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_dat
 static gboolean __mediacodec_fill_buffer_cb(media_packet_h pkt, void *user_data);
 static gboolean __mediacodec_error_cb(mediacodec_error_e error, void *user_data);
 static gboolean __mediacodec_eos_cb(void *user_data);
+static gboolean __mediacodec_supported_codec_cb(mediacodec_codec_type_e codec_type, void *user_data);
+static int __mediacodec_check_system_info_feature_supported();
+static gboolean __mediacodec_buffer_status_cb(mediacodec_status_e status, void *user_data);
+
 
 /*
 * Internal Implementation
@@ -111,6 +116,34 @@ bool __mediacodec_state_validate(mediacodec_h mediacodec, mediacodec_state_e thr
     return TRUE;
 }
 
+static int __mediacodec_check_system_info_feature_supported()
+{
+    bool bValue = false;
+    int nRetVal = false;
+
+    nRetVal = system_info_get_platform_bool("http://tizen.org/feature/mediacodec", &bValue);
+
+    if ( nRetVal != SYSTEM_INFO_ERROR_NONE )
+    {
+        LOGE("[%s] SYSTEM_INFO_ERROR : ", __FUNCTION__);
+        return false;
+    }
+
+    if ( false == bValue )
+    {
+        LOGI("system_info_get_platform_bool returned Unsupported feature capability\n");
+    }
+    else
+    {
+        LOGI("system_info_get_platform_bool returned Supported status feature\n");
+    }
+
+    return bValue;
+}
+
+/*
+ *  Public Implementation
+ */
 
 int mediacodec_create(mediacodec_h *mediacodec)
 {
@@ -152,6 +185,8 @@ int mediacodec_create(mediacodec_h *mediacodec)
     mc_set_fill_buffer_cb(handle->mc_handle, (mediacodec_output_buffer_available_cb)__mediacodec_fill_buffer_cb, handle);
     mc_set_error_cb(handle->mc_handle, (mediacodec_error_cb)__mediacodec_error_cb, handle);
     mc_set_eos_cb(handle->mc_handle, (mediacodec_eos_cb)__mediacodec_eos_cb, handle);
+    mc_set_buffer_status_cb(handle->mc_handle, (mediacodec_buffer_status_cb)__mediacodec_buffer_status_cb, handle);
+    mc_set_supported_codec_cb(handle->mc_handle, (mediacodec_supported_codec_cb)__mediacodec_supported_codec_cb, handle);
 
     return MEDIACODEC_ERROR_NONE;
 
@@ -323,7 +358,6 @@ int mediacodec_process_input(mediacodec_h mediacodec, media_packet_h inbuf, uint
     }
     else
     {
-        //handle->state = MEDIACODEC_STATE_EXCUTE;
         return MEDIACODEC_ERROR_NONE;
     }
 }
@@ -342,7 +376,43 @@ int mediacodec_get_output(mediacodec_h mediacodec, media_packet_h *outbuf, uint6
     }
     else
     {
-        //handle->state = MEDIACODEC_STATE_EXCUTE;
+        return MEDIACODEC_ERROR_NONE;
+    }
+}
+
+int mediacodec_flush_buffers (mediacodec_h mediacodec)
+{
+    MEDIACODEC_INSTANCE_CHECK(mediacodec);
+    mediacodec_s * handle = (mediacodec_s *) mediacodec;
+
+    int ret = mc_flush_buffers(handle->mc_handle);
+
+    if (ret != MEDIACODEC_ERROR_NONE)
+    {
+        return __convert_error_code(ret,(char*)__FUNCTION__);
+    }
+    else
+    {
+        handle->state = MEDIACODEC_STATE_IDLE;
+        return MEDIACODEC_ERROR_NONE;
+    }
+}
+
+int mediacodec_get_supported_type(mediacodec_h mediacodec, mediacodec_codec_type_e codec_type, bool encoder, int *support_type)
+{
+    MEDIACODEC_INSTANCE_CHECK(mediacodec);
+    mediacodec_s * handle = (mediacodec_s *) mediacodec;
+    MEDIACODEC_STATE_CHECK(handle, MEDIACODEC_STATE_IDLE);
+
+    int ret = mc_get_supported_type(handle->mc_handle, codec_type, encoder, support_type);
+
+    if (ret != MEDIACODEC_ERROR_NONE)
+    {
+        return __convert_error_code(ret,(char*)__FUNCTION__);
+    }
+    else
+    {
+        handle->state = MEDIACODEC_STATE_IDLE;
         return MEDIACODEC_ERROR_NONE;
     }
 }
@@ -451,6 +521,48 @@ int mediacodec_unset_eos_cb(mediacodec_h mediacodec)
     return MEDIACODEC_ERROR_NONE;
 }
 
+int mediacodec_set_buffer_status_cb(mediacodec_h mediacodec, mediacodec_buffer_status_cb callback, void* user_data)
+{
+    MEDIACODEC_INSTANCE_CHECK(mediacodec);
+    mediacodec_s * handle = (mediacodec_s *) mediacodec;
+    MEDIACODEC_STATE_CHECK(handle, MEDIACODEC_STATE_IDLE);
+
+    handle->buffer_status_cb = callback;
+    handle->buffer_status_cb_userdata = user_data;
+
+    LOGD("set buffer_status_cb(%p)", callback);
+
+    return MEDIACODEC_ERROR_NONE;
+
+}
+
+int mediacodec_unset_buffer_status_cb(mediacodec_h mediacodec)
+{
+    MEDIACODEC_INSTANCE_CHECK(mediacodec);
+    mediacodec_s * handle = (mediacodec_s *) mediacodec;
+
+    handle->buffer_status_cb = NULL;
+    handle->buffer_status_cb_userdata = NULL;
+
+    return MEDIACODEC_ERROR_NONE;
+}
+
+int mediacodec_foreach_supported_codec(mediacodec_h mediacodec, mediacodec_supported_codec_cb callback, void *user_data)
+{
+    MEDIACODEC_INSTANCE_CHECK(mediacodec);
+    mediacodec_s * handle = (mediacodec_s *) mediacodec;
+    MEDIACODEC_STATE_CHECK(handle, MEDIACODEC_STATE_IDLE);
+
+    handle->supported_codec_cb = callback;
+    handle->supported_codec_cb_userdata = user_data;
+
+    LOGD("set supported_codec_cb(%p)", callback);
+    _mediacodec_foreach_supported_codec(handle->mc_handle, callback, handle);
+
+    return MEDIACODEC_ERROR_NONE;
+
+}
+
 static gboolean __mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data)
 {
     if(user_data == NULL || pkt == NULL)
@@ -510,3 +622,33 @@ static gboolean __mediacodec_eos_cb(void *user_data)
 
     return 1;
 }
+
+static gboolean __mediacodec_supported_codec_cb(mediacodec_codec_type_e codec_type, void *user_data)
+{
+    if(user_data == NULL)
+        return 0;
+
+    mediacodec_s * handle = (mediacodec_s *) user_data;
+
+    if ( handle->supported_codec_cb )
+    {
+        return ((mediacodec_supported_codec_cb)handle->supported_codec_cb)(codec_type, handle->supported_codec_cb_userdata);
+    }
+    return false;
+}
+
+static gboolean __mediacodec_buffer_status_cb(mediacodec_status_e status, void *user_data)
+{
+    if(user_data == NULL)
+        return 0;
+
+    mediacodec_s * handle = (mediacodec_s *) user_data;
+
+    if ( handle->buffer_status_cb )
+    {
+        ((mediacodec_buffer_status_cb)handle->buffer_status_cb)(status, handle->buffer_status_cb_userdata);
+    }
+
+    return 1;
+}
+

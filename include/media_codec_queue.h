@@ -24,8 +24,8 @@ extern "C" {
 #endif
 
 typedef struct _async_queue {
-    GMutex *mutex;
-    GCond *condition;
+    GMutex mutex;
+    GCond condition;
     GList *head;
     GList *tail;
     guint length;
@@ -44,6 +44,8 @@ async_queue_t *mc_async_queue_new();
 void mc_async_queue_free(async_queue_t *async_queue);
 
 void mc_async_queue_push(async_queue_t *async_queue, gpointer data);
+
+gpointer mc_async_queue_pop_forced (async_queue_t * async_queue);
 
 gpointer mc_async_queue_pop(async_queue_t *async_queue);
 

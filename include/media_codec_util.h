@@ -42,22 +42,24 @@ typedef enum
     CODEC_RET_UNKNOWN_ERR     = -100,
 } CodecRet;
 
-typedef struct mc_sem mc_sem;
+typedef struct _mc_sem_t mc_sem_t;
 
-struct mc_sem
+struct _mc_sem_t
 {
-    GCond *condition;
-    GMutex *mutex;
+    GCond cond;
+    GMutex mutex;
     int counter;
 };
 
 void *mc_aligned_malloc(int size, int alignment);
 void mc_aligned_free(void *mem);
 
-mc_sem *mc_sem_new();
-void mc_sem_free(mc_sem *sem);
-void mc_sem_down(mc_sem *sem);
-void mc_sem_up(mc_sem *sem);
+mc_sem_t *mc_sem_new();
+void mc_sem_free(mc_sem_t *sem);
+void mc_sem_down(mc_sem_t *sem);
+void mc_sem_up(mc_sem_t *sem);
+
+void mc_hex_dump(char *desc, void *addr, int len);
 
 #define MC_FREEIF(x) \
 if ( x ) \
