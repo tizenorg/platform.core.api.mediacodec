@@ -1,7 +1,7 @@
 Name:       capi-media-codec
 Summary:    A Media Codec library in Tizen Native API
 Version:    0.4.0
-Release:    0
+Release:    1
 Group:      Multimedia/API
 License:    Apache-2.0
 Source0:    %{name}-%{version}.tar.gz
@@ -16,7 +16,6 @@ BuildRequires:  pkgconfig(libtbm)
 BuildRequires:  pkgconfig(gstreamer-1.0)
 BuildRequires:  pkgconfig(gstreamer-plugins-base-1.0)
 BuildRequires:  pkgconfig(gstreamer-app-1.0)
-BuildRequires:  pkgconfig(libdri2)
 BuildRequires:  pkgconfig(capi-system-info)
 %if "%{?tizen_target_name}"=="Z130H"
 #!BuildIgnore:  kernel-headers
@@ -55,7 +54,7 @@ export CFLAGS="$CFLAGS -DENABLE_FFMPEG_CODEC"
 %endif
 
 MAJORVER=`echo %{version} | awk 'BEGIN {FS="."}{print $1}'`
-cmake . -DCMAKE_INSTALL_PREFIX=/usr -DFULLVER=%{version} -DMAJORVER=${MAJORVER}
+%cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix} -DFULLVER=%{version} -DMAJORVER=${MAJORVER}
 
 
 make %{?jobs:-j%jobs}
