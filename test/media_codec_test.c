@@ -1455,7 +1455,7 @@ void quit_program(void)
             g_media_codec[i] = NULL;
         }
     }
-    elm_exit();
+    //elm_exit();
 }
 
 void reset_menu_state()
