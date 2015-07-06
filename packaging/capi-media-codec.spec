@@ -1,7 +1,7 @@
 Name:       capi-media-codec
 Summary:    A Media Codec library in Tizen Native API
 Version:    0.4.0
-Release:    1
+Release:    2
 Group:      Multimedia/API
 License:    Apache-2.0
 Source0:    %{name}-%{version}.tar.gz
@@ -54,7 +54,7 @@ export CFLAGS="$CFLAGS -DENABLE_FFMPEG_CODEC"
 %endif
 
 MAJORVER=`echo %{version} | awk 'BEGIN {FS="."}{print $1}'`
-%cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix} -DFULLVER=%{version} -DMAJORVER=${MAJORVER}
+cmake . -DCMAKE_INSTALL_PREFIX=/usr -DFULLVER=%{version} -DMAJORVER=${MAJORVER}
 
 
 make %{?jobs:-j%jobs}
@@ -63,8 +63,7 @@ make %{?jobs:-j%jobs}
 rm -rf %{buildroot}
 mkdir -p %{buildroot}/usr/share/license
 mkdir -p %{buildroot}/usr/bin
-mkdir -p %{buildroot}/opt/usr/devel
-cp test/media_codec_test %{buildroot}/opt/usr/devel
+cp test/media_codec_test %{buildroot}/usr/bin
 cp LICENSE.APLv2 %{buildroot}/usr/share/license/%{name}
 
 %make_install
@@ -79,7 +78,7 @@ cp LICENSE.APLv2 %{buildroot}/usr/share/license/%{name}
 %manifest capi-media-codec.manifest
 %{_libdir}/libcapi-media-codec.so.*
 %{_datadir}/license/%{name}
-/opt/usr/devel/*
+/usr/bin/*
 #%{_bindir}/*
 
 %files devel
