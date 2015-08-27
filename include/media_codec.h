@@ -45,7 +45,7 @@ typedef struct mediacodec_s *mediacodec_h;
  * @brief Enumeration of  media codec support  type
  * @since_tizen 2.3
  * @remarks If this codec is to be used as an encoder or decoder, the codec flag must be set to #MEDIACODEC_ENCODER or
- *          #MEDIACODEC_DECODER. If user doesn't set optional flag, default flags will be set to #MEDIACODEC_SUPPORT_TYPE_HW.
+ *          #MEDIACODEC_DECODER. If user doesn't set optional flag, default flags will be set to #MEDIACODEC_SUPPORT_TYPE_SW.
  */
 typedef enum
 {
@@ -119,7 +119,7 @@ typedef enum
     MEDIACODEC_ERROR_NOT_SUPPORTED_FORMAT       = TIZEN_ERROR_MEDIACODEC | 0x0b,        /**< Not supported format */
     MEDIACODEC_ERROR_BUFFER_NOT_AVAILABLE       = TIZEN_ERROR_MEDIACODEC | 0x0c,        /**< Not available buffer */
     MEDIACODEC_ERROR_OVERFLOW_INBUFFER          = TIZEN_ERROR_MEDIACODEC | 0x0d,        /**< Overflow input buffer (Since 2.4)*/
-    MEDIACODEC_ERROR_RESOURCE_OVERLOADED        = TIZEN_ERROR_MEDIACODEC | 0x0e,        /**< Exceed the instance limt (Since 2.4)*/
+    MEDIACODEC_ERROR_RESOURCE_OVERLOADED        = TIZEN_ERROR_MEDIACODEC | 0x0e,        /**< Exceed the instance limits (Since 2.4)*/
 } mediacodec_error_e;
 
 /**

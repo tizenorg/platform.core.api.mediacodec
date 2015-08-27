@@ -26,6 +26,7 @@
 #include <media_codec_queue.h>
 #include <media_codec_bitstream.h>
 #include <media_codec_spec_emul.h>
+#include <media_codec_ini.h>
 
 
 /*===========================================================================================
@@ -81,6 +82,7 @@ typedef enum
     MC_OUTPUT_BUFFER_EMPTY      =   -16,
     MC_OUTPUT_BUFFER_OVERFLOW   =   -17,    /**< codec output buffer is overflow */
     MC_MEMORY_ALLOCED           =   -18,    /**< codec has got memory and can decode one frame */
+    MC_COURRPTED_INI            =   -19,
 } mc_ret_e;
 
 /*---------------------------------------------------------------------------
@@ -133,10 +135,10 @@ typedef enum {
 
 typedef enum _mc_codec_port_type_e
 {
-	CODEC_PORT_TYPE_GENERAL,
-	CODEC_PORT_TYPE_OMX,
-	CODEC_PORT_TYPE_GST,
-	CODEC_PORT_TYPE_MAX,
+    CODEC_PORT_TYPE_GENERAL,
+    CODEC_PORT_TYPE_OMX,
+    CODEC_PORT_TYPE_GST,
+    CODEC_PORT_TYPE_MAX,
 } mc_codec_port_type_e;
 
 typedef enum _mc_vendor_e
@@ -206,6 +208,14 @@ struct _mc_handle_t
     void* user_cb[_MEDIACODEC_EVENT_TYPE_NUM];
     void* user_data[_MEDIACODEC_EVENT_TYPE_NUM];
 
+    mc_codec_map_t encoder_map[MEDIA_CODEC_MAX_CODEC_TYPE];
+    mc_codec_map_t decoder_map[MEDIA_CODEC_MAX_CODEC_TYPE];
+
+    int num_supported_codecs;
+    int num_supported_decoder;
+    int num_supported_encoder;
+
+    mc_ini_t ini;
 };
 
 /*===========================================================================================
@@ -250,8 +260,8 @@ int mc_unset_error_cb(MMHandleType mediacodec);
 int mc_set_eos_cb(MMHandleType mediacodec, mediacodec_eos_cb callback, void* user_data);
 int mc_unset_eos_cb(MMHandleType mediacodec);
 
-int mc_set_need_data_cb(MMHandleType mediacodec, mediacodec_buffer_status_cb callback, void* user_data);
-int mc_unset_need_data_cb(MMHandleType mediacodec);
+int mc_set_buffer_status_cb(MMHandleType mediacodec, mediacodec_buffer_status_cb callback, void* user_data);
+int mc_unset_buffer_status_cb(MMHandleType mediacodec);
 
 
 #ifdef __cplusplus

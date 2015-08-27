@@ -66,9 +66,6 @@ if ( x ) \
     g_free( x ); \
 x = NULL;
 
-
-
-
 #ifdef __cplusplus
 }
 #endif
