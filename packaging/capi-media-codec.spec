@@ -17,7 +17,8 @@ BuildRequires:  pkgconfig(gstreamer-1.0)
 BuildRequires:  pkgconfig(gstreamer-plugins-base-1.0)
 BuildRequires:  pkgconfig(gstreamer-app-1.0)
 BuildRequires:  pkgconfig(capi-system-info)
-%if "%{?tizen_target_name}"=="Z130H"
+BuildRequires:  pkgconfig(iniparser)
+%if "%{tizen_target_name}" == "Z130H" || "%{?tizen_target_name}" == "Z300H"
 #!BuildIgnore:  kernel-headers
 BuildConflicts: linux-glibc-devel
 BuildRequires:  kernel-headers-tizen-dev
@@ -41,8 +42,8 @@ Requires: %{name} = %{version}-%{release}
 
 
 %build
-%if "%{?tizen_target_name}"=="Z130H"
-export CFLAGS="$CFLAGS -DZ130H"
+%if "%{tizen_target_name}" == "Z130H" || "%{?tizen_target_name}" == "Z300H"
+export CFLAGS="$CFLAGS -DTIZEN_PROFILE_LITE"
 %endif
 %if 0%{?sec_build_binary_debug_enable}
 export CFLAGS="$CFLAGS -DTIZEN_DEBUG_ENABLE"
@@ -54,7 +55,7 @@ export CFLAGS="$CFLAGS -DENABLE_FFMPEG_CODEC"
 %endif
 
 MAJORVER=`echo %{version} | awk 'BEGIN {FS="."}{print $1}'`
-%cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix} -DFULLVER=%{version} -DMAJORVER=${MAJORVER}
+%cmake . -DCMAKE_INSTALL_PREFIX=/usr -DFULLVER=%{version} -DMAJORVER=${MAJORVER}
 
 
 make %{?jobs:-j%jobs}
@@ -63,8 +64,7 @@ make %{?jobs:-j%jobs}
 rm -rf %{buildroot}
 mkdir -p %{buildroot}/usr/share/license
 mkdir -p %{buildroot}/usr/bin
-mkdir -p %{buildroot}/opt/usr/devel
-cp test/media_codec_test %{buildroot}/opt/usr/devel
+cp test/media_codec_test %{buildroot}/usr/bin
 cp LICENSE.APLv2 %{buildroot}/usr/share/license/%{name}
 
 %make_install
@@ -79,7 +79,7 @@ cp LICENSE.APLv2 %{buildroot}/usr/share/license/%{name}
 %manifest capi-media-codec.manifest
 %{_libdir}/libcapi-media-codec.so.*
 %{_datadir}/license/%{name}
-/opt/usr/devel/*
+/usr/bin/*
 #%{_bindir}/*
 
 %files devel

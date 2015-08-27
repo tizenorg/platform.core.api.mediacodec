@@ -39,6 +39,20 @@ typedef enum
     NAL_PREFIX_SVC = 14
 } mc_nal_unit_type_e;
 
+enum
+{
+    MC_EXIST_SPS    = 1 << 0,
+    MC_EXIST_PPS    = 1 << 1,
+    MC_EXIST_IDR    = 1 << 2,
+    MC_EXIST_SLICE  = 1 << 3,
+
+    MC_VALID_HEADER = ( MC_EXIST_SPS | MC_EXIST_PPS ),
+    MC_VALID_FIRST_SLICE = ( MC_EXIST_SPS | MC_EXIST_PPS | MC_EXIST_IDR )
+};
+
+#define CHECK_VALID_PACKET(state, expected_state) \
+  ((state & (expected_state)) == (expected_state))
+
 static const unsigned int mask[33] =
 {
     0x00000000, 0x00000001, 0x00000003, 0x00000007,
@@ -79,9 +93,17 @@ short mc_show_bits(mc_bitstream_t *stream, unsigned char nbits, unsigned int *pu
 short mc_read_bits( mc_bitstream_t *stream, unsigned char nbits, unsigned int *pulOutData );
 short mc_byte_align( mc_bitstream_t *stream );
 
+bool _mc_is_voss(unsigned char *buf, int size, int *codec_size);
+bool _mc_is_ivop(unsigned char *p, int size, int pos);
+bool _mc_is_vop(unsigned char *p, int size, int pos);
+
+
 int __mc_decode_sps(mc_bitstream_t *pstream, int *width, int *height);
-unsigned int __mc_bytestream_to_nal( unsigned char* data, int size, unsigned char *nal );
-int _mc_check_bytestream ( media_packet_h pkt, unsigned char *nal, int byte_length, int *width, int *height);
+unsigned int __mc_bytestream_to_nal( unsigned char* data, int size );
+int _mc_check_h264_bytestream ( unsigned char *nal, int byte_length, bool port, bool *codec_config, bool *sync_flag, bool *slice);
+int _mc_check_valid_h263_frame(unsigned char *p, int size);
+bool _mc_check_h263_out_bytestream(unsigned char *p, int buf_length, bool* need_sync_flag);
+int _mc_check_mpeg4_out_bytestream(unsigned char *buf, int buf_length, bool* need_codec_data, bool *need_sync_flag);
 
 
 #ifdef __cplusplus

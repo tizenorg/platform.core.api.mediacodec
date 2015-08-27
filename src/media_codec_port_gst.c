@@ -27,13 +27,13 @@
 #include <gst/gstelement.h>
 #include <gst/app/gstappsrc.h>
 
-#ifdef Z130H
+#ifdef TIZEN_PROFILE_LITE
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/ion.h>
 #endif
 
-#define GST_MC_EVENT_CODEC_DATA "GstEventCodecData"
+#define ALIGN(x, a)       (((x) + (a) - 1) & ~((a) - 1))
 /*
 * Internal Implementation
 */
@@ -44,36 +44,34 @@ static media_packet_h _mc_get_input_buffer(mc_gst_core_t *core);
 
 static gboolean __mc_gst_init_gstreamer();
 static int _mc_output_media_packet_new(mc_gst_core_t *core, bool video, bool encoder, media_format_mimetype_e out_mime);
-static mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t* core, gchar *factory_name);
+static mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t *core, gchar *factory_name);
 static mc_ret_e _mc_gst_destroy_pipeline(mc_gst_core_t *core);
-static void __mc_gst_buffer_add (GstElement *element, GstBuffer *buffer, GstPad *pad, gpointer data);
+static void __mc_gst_buffer_add(GstElement *element, GstBuffer *buffer, GstPad *pad, gpointer data);
 static int __mc_output_buffer_finalize_cb(media_packet_h packet, int error_code, void *user_data);
-static void _mc_gst_update_caps(mc_gst_core_t *core, media_packet_h pkt, GstCaps **caps);
-static GstMCBuffer* _mc_gst_media_packet_to_gstbuffer(mc_gst_core_t* core, GstCaps **caps, media_packet_h pkt, bool codec_config);
+static void _mc_gst_update_caps(mc_gst_core_t *core, media_packet_h pkt, GstCaps **caps, GstMCBuffer* buff, bool codec_config);
+static GstMCBuffer *_mc_gst_media_packet_to_gstbuffer(mc_gst_core_t *core, GstCaps **caps, media_packet_h pkt, bool codec_config);
 static int _mc_gst_gstbuffer_to_appsrc(mc_gst_core_t *core, GstMCBuffer *buff);
-static gchar* __mc_get_gst_input_format(media_packet_h packet, bool is_hw);
-static media_packet_h __mc_gst_gstbuffer_to_media_packet(mc_gst_core_t* core, GstBuffer* buffer);
+static gchar *__mc_get_gst_input_format(media_packet_h packet, bool is_hw);
 static media_packet_h __mc_gst_make_media_packet(mc_gst_core_t *core, unsigned char *data, int size);
 static gboolean __mc_gst_bus_callback(GstBus *bus, GstMessage *msg, gpointer data);
-static GstBusSyncReply __mc_gst_bus_sync_callback(GstBus * bus, GstMessage *msg, gpointer data);
-static MMVideoBuffer* __mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet_h pkt);
-static GstPadProbeReturn event_probe_cb(GstObject *pad, GstPadProbeInfo *info, gpointer user_data);
-static GType __mc_gst_buffer_get_type(void);
-static void __mc_gst_buffer_class_init(gpointer g_class, gpointer class_data);
+static GstBusSyncReply __mc_gst_bus_sync_callback(GstBus *bus, GstMessage *msg, gpointer data);
+static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t *core, media_packet_h pkt);
 static GstMCBuffer *gst_mediacodec_buffer_new(mc_gst_core_t* core, media_packet_h pkt, uint64_t size);
 static void gst_mediacodec_buffer_finalize(GstMCBuffer *buffer);
+static int __mc_set_caps_streamheader(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer*buff, guint streamheader_size);
+static int __mc_set_caps_codecdata(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer*buff, guint codecdata_size);
 
-static gint __gst_handle_stream_error(mc_gst_core_t* core, GError* error, GstMessage * message);
-static gint __gst_transform_gsterror( mc_gst_core_t *core, GstMessage * message, GError* error );
-static gint __gst_handle_resource_error(mc_gst_core_t* core, int code );
-static gint __gst_handle_library_error(mc_gst_core_t* core, int code);
-static gint __gst_handle_core_error(mc_gst_core_t* core, int code );
+static gint __gst_handle_stream_error(mc_gst_core_t *core, GError *error, GstMessage *message);
+static gint __gst_transform_gsterror(mc_gst_core_t *core, GstMessage *message, GError *error);
+static gint __gst_handle_resource_error(mc_gst_core_t *core, int code);
+static gint __gst_handle_library_error(mc_gst_core_t *core, int code);
+static gint __gst_handle_core_error(mc_gst_core_t *core, int code);
 
 static int _mc_link_vtable(mc_gst_core_t *core, mediacodec_codec_type_e id, gboolean is_encoder, gboolean is_hw);
-#ifdef Z130H
-static int __tbm_get_physical_addr_bo(tbm_bo_handle tbm_bo_handle_fd_t, int* phy_addr, int* phy_size);
+#ifdef TIZEN_PROFILE_LITE
+static int __tbm_get_physical_addr_bo(tbm_bo_handle tbm_bo_handle_fd_t, int *phy_addr, int *phy_size);
 #endif
-static void _mc_gst_flush_buffers( mc_gst_core_t *core );
+static void _mc_gst_flush_buffers(mc_gst_core_t *core);
 static void _mc_gst_set_flush_input(mc_gst_core_t *core);
 static void _mc_gst_set_flush_output(mc_gst_core_t *core);
 
@@ -82,77 +80,122 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest,
     unsigned char *nv12t_src, int yuv420_width, int yuv420_height,
     int left, int top, int right, int buttom);
 
-/*for test */
-static int count;
-static int input_count;
-#define GST_TYPE_MC_BUFFER (__mc_gst_buffer_get_type())
+static void _mc_send_eos_signal(mc_gst_core_t *core);
+static void _mc_wait_for_eos(mc_gst_core_t *core);
 
-/* SPRD Decoder */
-int(*vdec_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_outbuf_with_packet,  &__mc_vdec_caps};
-#ifdef Z130H
-/* SPRD H.264 Decoder */
-int(*vdec_h264_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_packet_with_mm_video_buffer,  &__mc_sprddec_caps};
-/* SPRD H.264 Encoder */
-int(*venc_vtable[])() = {&__mc_fill_inbuf_with_bo, &__mc_fill_outbuf_with_packet, &__mc_sprdenc_caps};
-#else
-/* M0 H.264 Decoder */
-int(*vdec_h264_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_packet_with_mm_video_buffer,  &__mc_h264dec_caps};
-/* M0 H.264 Encoder */
-int(*venc_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_outbuf_with_h264_packet, &__mc_venc_caps};
-#endif
-/* AAC_LC Encoder */
-int(*aenc_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_outbuf_with_packet, &__mc_aenc_caps};
-/* AAC_LC Deocder */
-int(*adec_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_outbuf_with_packet, &__mc_adec_caps};
-int(*adec_aacv12_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_outbuf_with_packet, &__mc_adec_aacv12_caps};
-/* MP3 Deocder */
-int(*adec_mp3_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_outbuf_with_packet, &__mc_adec_mp3_caps};
-/* AMR-NB Deocder */
-int(*adec_amrnb_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_outbuf_with_packet, &__mc_adec_amrnb_caps};
-/* AMR-WB Deocder */
-int(*adec_amrwb_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_outbuf_with_packet, &__mc_adec_amrwb_caps};
-/* AMR-NB Deocder */
-int(*aenc_amrnb_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_outbuf_with_packet, &__mc_aenc_amrnb_caps};
+/* video vtable */
+int(*vdec_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_vdec_packet_with_outbuf,  &__mc_vdec_caps};
+int(*venc_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_venc_packet_with_outbuf, &__mc_venc_caps};
+
+
+int(*vdec_h264_sw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* FFMPEG H.264 Decoder Vtable */
+                                  &__mc_fill_vdec_packet_with_outbuf,
+                                  &__mc_vdec_caps};
+int(*vdec_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* SPRD H.264 Decoder Vtable */
+                                  &__mc_fill_video_packet_with_mm_video_buffer,
+                                  &__mc_h264dec_caps};
+int(*venc_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,         /* SPRD H.264 Encoder Vtable */
+                                  &__mc_fill_venc_packet_with_outbuf,
+                                  &__mc_venc_caps};
+int(*vdec_mpeg4_sw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* FFMPEG MPEG4 Decoder Vtable */
+                                  &__mc_fill_vdec_packet_with_outbuf,
+                                  &__mc_vdec_mpeg4_caps};
+int(*vdec_mpeg4_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* SPRD MPEG4 Decoder Vtable */
+                                  &__mc_fill_video_packet_with_mm_video_buffer,
+                                  &__mc_sprddec_mpeg4_caps};
+int(*venc_mpeg4_sw_vtable[])() = {&__mc_fill_inbuf_with_venc_packet,            /* SPRD MPEG4 Encoder Vtable */
+                                  &__mc_fill_venc_packet_with_outbuf,
+                                  &__mc_venc_caps};
+int(*venc_mpeg4_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,        /* SPRD MPEG4 Encoder Vtable */
+                                  &__mc_fill_venc_packet_with_outbuf,
+                                  &__mc_sprdenc_mpeg4_caps};
+int(*vdec_h263_sw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* FFMPEG MPEG4 Decoder Vtable */
+                                  &__mc_fill_vdec_packet_with_outbuf,
+                                  &__mc_vdec_h263_caps};
+int(*vdec_h263_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* SPRD MPEG4 Decoder Vtable */
+                                  &__mc_fill_video_packet_with_mm_video_buffer,
+                                  &__mc_sprddec_mpeg4_caps};
+int(*venc_h263_sw_vtable[])() = {&__mc_fill_inbuf_with_venc_packet,            /* SPRD MPEG4 Encoder Vtable */
+                                  &__mc_fill_venc_packet_with_outbuf,
+                                  &__mc_venc_caps};
+int(*venc_h263_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,        /* SPRD MPEG4 Encoder Vtable */
+                                  &__mc_fill_venc_packet_with_outbuf,
+                                  &__mc_sprdenc_mpeg4_caps};
+
+/* audio vtable */
+int(*aenc_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_packet_with_outbuf, &__mc_aenc_caps};
+int(*adec_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_packet_with_outbuf, &__mc_adec_caps};
+
+int(*aenc_aac_vtable[])() = {&__mc_fill_inbuf_with_packet,                    /* AAC LC Encoder vtable */
+                              &__mc_fill_packet_with_outbuf,
+                              &__mc_aenc_aac_caps};
+int(*adec_aac_vtable[])() = {&__mc_fill_inbuf_with_packet,                    /* AAC LC Decoder Vtable */
+                              &__mc_fill_packet_with_outbuf,
+                              &__mc_adec_aac_caps};
+int(*adec_aacv12_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* AAC HE Decoder Vtable */
+                                &__mc_fill_packet_with_outbuf,
+                                &__mc_adec_aacv12_caps};
+int(*adec_mp3_vtable[])() = {&__mc_fill_inbuf_with_packet,                    /* MP3 Decoder Vtable */
+                              &__mc_fill_packet_with_outbuf,
+                              &__mc_adec_mp3_caps};
+int(*adec_amrnb_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* AMR-NB Decoder Vtable */
+                                &__mc_fill_packet_with_outbuf,
+                                &__mc_adec_amrnb_caps};
+int(*adec_amrwb_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* AMR-WB Decoder Vtable */
+                                &__mc_fill_packet_with_outbuf,
+                                &__mc_adec_amrwb_caps};
+int(*aenc_amrnb_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* AMR-NB Encoder Vtable */
+                              &__mc_fill_packet_with_outbuf,
+                              &__mc_aenc_amrnb_caps};
+int(*adec_vorbis_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* VORBIS Decoder Vtable */
+                                &__mc_fill_packet_with_outbuf,
+                                &__mc_adec_vorbis_caps};
+int(*adec_flac_vtable[])() = {&__mc_fill_inbuf_with_packet,                   /* FLAC Decoder Vtable */
+                              &__mc_fill_packet_with_outbuf,
+                              &__mc_adec_flac_caps};
+int(*adec_wma_vtable[])() = {&__mc_fill_inbuf_with_packet,                    /* WMA Decoder Vtable */
+                              &__mc_fill_packet_with_outbuf,
+                              &__mc_adec_wma_caps};
 
 
 /*
- * mc_gst_object functions
+ * fill_inbuf virtual functions
 */
-int __mc_fill_input_buffer(mc_gst_core_t *core, void *buf_data, int buf_size, GstMCBuffer *buff)
+int __mc_fill_input_buffer(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *buff)
 {
-    return core->vtable[fill_inbuf](core, buf_data, buf_size, buff);
+    return core->vtable[fill_inbuf](core, pkt, buff);
 }
 
-int __mc_fill_output_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt)
-{
-    return core->vtable[fill_outbuf](core, data, size, out_pkt);
-}
-
-int __mc_create_caps(mc_gst_core_t *core, GstCaps **caps)
-{
-    return core->vtable[create_caps](core, caps);
-}
-
-int __mc_fill_inbuf_with_bo(mc_gst_core_t *core, void *buf_data, int buf_size, GstMCBuffer *mc_buffer)
+int __mc_fill_inbuf_with_mm_video_buffer(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *mc_buffer)
 {
     int ret = MC_ERROR_NONE;
 
-    MMVideoBuffer *imgb = NULL;
-    guint n;
+    MMVideoBuffer *mm_vbuffer = NULL;
+    void *buf_data = NULL;
+    uint64_t buf_size = 0;
 
-    mc_buffer->has_imgb = true;
-
-
-    imgb = __mc_gst_make_tbm_buffer(core, mc_buffer->pkt);
-
-    if( imgb != NULL ) {
-        gst_buffer_prepend_memory(mc_buffer->buffer,
-                gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, imgb, sizeof(*imgb), 0,
-                    sizeof(*imgb), mc_buffer, (GDestroyNotify)gst_mediacodec_buffer_finalize));
-        LOGD("scmn_imgb is appended, %d, %d", sizeof(*imgb), gst_buffer_n_memory(mc_buffer->buffer));
+    ret = media_packet_get_buffer_size(pkt, &buf_size);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("buffer size get fail");
+        return MC_ERROR;
     }
 
-    if( buf_data != NULL) {
+    ret = media_packet_get_buffer_data_ptr(pkt, &buf_data);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("buffer size get fail");
+        return MC_ERROR;
+    }
+
+    mm_vbuffer = __mc_gst_make_tbm_buffer(core, mc_buffer->pkt);
+
+    if (mm_vbuffer != NULL) {
+        gst_buffer_prepend_memory(mc_buffer->buffer,
+                gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, mm_vbuffer, sizeof(*mm_vbuffer), 0,
+                    sizeof(*mm_vbuffer), mm_vbuffer, free));
+        LOGD("scmn_mm_vbuffer is appended, %d, %d", sizeof(*mm_vbuffer), gst_buffer_n_memory(mc_buffer->buffer));
+    }
+
+    if (buf_data != NULL) {
         gst_buffer_prepend_memory(mc_buffer->buffer,
                 gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, buf_data, buf_size, 0,
                     buf_size, mc_buffer, (GDestroyNotify)gst_mediacodec_buffer_finalize));
@@ -161,13 +204,25 @@ int __mc_fill_inbuf_with_bo(mc_gst_core_t *core, void *buf_data, int buf_size, G
     return ret;
 }
 
-int __mc_fill_inbuf_with_packet(mc_gst_core_t *core, void *buf_data, int buf_size, GstMCBuffer *mc_buffer)
+int __mc_fill_inbuf_with_packet(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *mc_buffer)
 {
     int ret = MC_ERROR_NONE;
+    void *buf_data = NULL;
+    uint64_t buf_size = 0;
 
-    mc_buffer->has_imgb = false;
+    ret = media_packet_get_buffer_size(pkt, &buf_size);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("buffer size get fail");
+        return MC_ERROR;
+    }
 
-    if( buf_data != NULL) {
+    ret = media_packet_get_buffer_data_ptr(pkt, &buf_data);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("buffer size get fail");
+        return MC_ERROR;
+    }
+
+    if (buf_data != NULL) {
         gst_buffer_append_memory(mc_buffer->buffer,
                 gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, buf_data, buf_size, 0,
                     buf_size, mc_buffer, (GDestroyNotify)gst_mediacodec_buffer_finalize));
@@ -177,171 +232,277 @@ int __mc_fill_inbuf_with_packet(mc_gst_core_t *core, void *buf_data, int buf_siz
     return ret;
 }
 
-int __mc_fill_outbuf_with_bo(mc_gst_core_t *core, void *data, int size, media_packet_h* out_pkt)
+int __mc_fill_inbuf_with_venc_packet(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *mc_buffer)
 {
-    int i = 0;;
-    int bo_num = 0;
+    int ret = MC_ERROR_NONE;
+    void *uv_ptr = NULL;
+    void *y_ptr = NULL;
+    int buf_size = 0;
+    int stride_width;
+    int stride_height;
+    int width;
+    int height;
+    uint32_t plane_num;
+    int i;
+    int j;
+    int stride = 0;
 
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
 
-    MMVideoBuffer *imgb = NULL;
-    tbm_surface_h tsurf = NULL;
-    mc_decoder_info_t *codec_info = (mc_decoder_info_t *)core->codec_info;
-#ifdef TBM_API_CHANGE
-    tbm_surface_info_s tsurf_info;
-    memset(&tsurf_info, 0x0, sizeof(tbm_surface_info_s));
-#endif
+    width = enc_info->width;
+    height = enc_info->height;
 
-    /* create tbm surface */
-    for (i = 0; i < MM_VIDEO_BUFFER_PLANE_MAX; i++)
-    {
-        if (imgb->handle.bo[i])
-        {
-            bo_num++;
-#ifdef TBM_API_CHANGE
-            tsurf_info.planes[i].stride = imgb->stride_width[i];
-#endif
+    ret = media_packet_get_number_of_video_planes(pkt, &plane_num);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("media_packet_get_number_of_video_planes failed");
+        return MC_ERROR;
+    }
+
+    ret = media_packet_get_video_plane_data_ptr(pkt, 0, &y_ptr);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("media_packet_get_video_plane_data_ptr failed");
+        return MC_ERROR;
+    }
+
+    ret = media_packet_get_video_stride_width(pkt, 0, &stride_width);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("media_packet_get_video_stride_width failed");
+        return MC_ERROR;
+    }
+
+    ret = media_packet_get_video_stride_height(pkt, 0, &stride_height);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("media_packet_get_video_stride_width failed");
+        return MC_ERROR;
+    }
+
+    if (width == stride_width) {
+        mc_buffer->buf_size += stride_width * stride_height;
+
+        for (i = 1; i < plane_num; i++) {
+            media_packet_get_video_plane_data_ptr(pkt, i, &uv_ptr);
+            media_packet_get_video_stride_width(pkt, i, &stride_width);
+            media_packet_get_video_stride_height(pkt, i, &stride_height);
+
+            buf_size = stride_width * stride_height;
+
+            memcpy(y_ptr + mc_buffer->buf_size, uv_ptr, buf_size);
+            LOGD("width is same with stride");
+            LOGD("plane : %d, buf_size : %d, total : %d", i, buf_size, mc_buffer->buf_size);
+            mc_buffer->buf_size += buf_size;
+
+        }
+    } else {
+
+        for (j = 0; j < height; j++) {
+            memcpy(y_ptr + mc_buffer->buf_size, y_ptr + stride, width);
+            mc_buffer->buf_size += width;
+            stride += stride_width;
+        }
+
+        stride = 0;
+
+        for (i = 1; i < plane_num; i++) {
+            media_packet_get_video_plane_data_ptr(pkt, i, &uv_ptr);
+            media_packet_get_video_stride_width(pkt, i, &stride_width);
+            media_packet_get_video_stride_height(pkt, i, &stride_height);
+
+            for (j = 0; j < height>>1; j++) {
+                memcpy(y_ptr + mc_buffer->buf_size, uv_ptr + stride, width>>1);
+                mc_buffer->buf_size += width>>1;
+                stride += stride_width;
+            }
+
+            memcpy(y_ptr + mc_buffer->buf_size, uv_ptr, buf_size);
+            LOGD("plane : %d, buf_size : %d, total : %d", i, buf_size, mc_buffer->buf_size);
+            mc_buffer->buf_size += buf_size;
         }
     }
 
-    if (bo_num > 0)
-    {
-#ifdef TBM_API_CHANGE
-        tsurf_info.width = codec_info->width;
-        tsurf_info.height = codec_info->height;
-        tsurf_info.format = TBM_FORMAT_NV12;          // bo_format
-        tsurf_info.bpp = tbm_surface_internal_get_bpp(TBM_FORMAT_NV12);
-        tsurf_info.num_planes = tbm_surface_internal_get_num_planes(TBM_FORMAT_NV12);
-        tsurf_info.size = 0;
-        for(i = 0; i < tsurf_info.num_planes; i++) {
-            tsurf_info.planes[i].stride = imgb->stride_width[i];
-            tsurf_info.planes[i].size = imgb->stride_width[i] * imgb->stride_height[i];
-            if(i < bo_num)
-                tsurf_info.planes[i].offset = 0;
-            else
-                tsurf_info.planes[i].offset = tsurf_info.planes[i - 1].size;
+    if (y_ptr != NULL) {
+        gst_buffer_append_memory(mc_buffer->buffer,
+                gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, y_ptr, mc_buffer->buf_size, 0,
+                    mc_buffer->buf_size, mc_buffer, (GDestroyNotify)gst_mediacodec_buffer_finalize));
+        LOGD("%d plane data apended : width : %d, height : %d, size : %d",
+                i, stride_width, stride_height, mc_buffer->buf_size);
+    }
+
+    return ret;
+}
+
+
+/*
+ * fill_outbuf virtual functions
+*/
+
+int __mc_fill_output_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt)
+{
+    return core->vtable[fill_outbuf](core, data, size, out_pkt);
+}
+
+int __mc_fill_vdec_packet_with_outbuf(mc_gst_core_t *core, void *data, int size, media_packet_h *pkt)
+{
+    int i;
+    int stride_width;
+    int stride_height;
+    uint32_t width;
+    uint32_t height;
+    uint32_t plane_num;
+    uint32_t buf_size;
+    uint32_t plane_size;
+    int ret = MC_ERROR_NONE;
+    void *pkt_data = NULL;
+    tbm_surface_h tsurf = NULL;
+    tbm_surface_info_s tsurf_info;
+    tbm_bo bo[MM_VIDEO_BUFFER_PLANE_MAX];
+    tbm_bo_handle thandle;
+
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+
+    width = dec_info->width;
+    height = dec_info->height;
+    stride_width = ALIGN(width, 4);
+    stride_height = ALIGN(height, 4);
+    buf_size = stride_width * stride_height * 3 / 2;
+
+    if (buf_size > size)
+        return MC_ERROR;
+
+    memset(&tsurf_info, 0x0, sizeof(tbm_surface_info_s));
+
+    bo[0] = tbm_bo_alloc(core->bufmgr, buf_size, TBM_BO_WC);
+    if (!bo[0]) {
+        LOGE("bo allocation failed");
+    }
+
+    tsurf_info.width = dec_info->width;
+    tsurf_info.height = dec_info->height;
+    tsurf_info.format = TBM_FORMAT_YVU420;
+    tsurf_info.bpp = tbm_surface_internal_get_bpp(TBM_FORMAT_YVU420);
+    tsurf_info.num_planes = tbm_surface_internal_get_num_planes(TBM_FORMAT_YVU420);
+    tsurf_info.size = 0;
+
+    for (i = 0; i < tsurf_info.num_planes; i++) {
+        if (i == 0) {
+            tsurf_info.planes[i].stride = stride_width;
+            tsurf_info.planes[i].size = stride_width * stride_height;
+            tsurf_info.planes[i].offset = 0;
+            tsurf_info.size = tsurf_info.planes[i].size;
+        } else {
+            tsurf_info.planes[i].stride = stride_width>>1;
+            tsurf_info.planes[i].size = (stride_width>>1) * (stride_height>>1);
+            tsurf_info.planes[i].offset = (tsurf_info.planes[i-1].offset + tsurf_info.planes[i - 1].size);
             tsurf_info.size += tsurf_info.planes[i].size;
         }
-
-        tsurf = tbm_surface_internal_create_with_bos(&tsurf_info, (tbm_bo *)imgb->handle.bo, bo_num);
-        LOGD("[NEW API] tbm surface %p", tsurf);
-#else
-        tsurf = tbm_surface_internal_create_with_bos(codec_info->width, codec_info->height, TBM_FORMAT_NV12, (tbm_bo *)imgb->handle.bo, bo_num);
-        LOGD("[OLD  API] tbm surface %p", tsurf);
-#endif
     }
 
-    if (tsurf)
-    {
-        media_packet_create_from_tbm_surface(core->output_fmt, tsurf, (media_packet_finalize_cb)__mc_output_buffer_finalize_cb, core, out_pkt);
-        LOGD("!!!! create_gst_buffer = %p", *out_pkt);
+    thandle = tbm_bo_map(bo[0], TBM_DEVICE_CPU, TBM_OPTION_WRITE);
+    memcpy(thandle.ptr, data, tsurf_info.size);
+    tbm_bo_unmap(bo[0]);
+
+    tsurf = tbm_surface_internal_create_with_bos(&tsurf_info, bo, 1);
+
+    if (tsurf) {
+        media_packet_create_from_tbm_surface(core->output_fmt, tsurf,
+                (media_packet_finalize_cb)__mc_output_buffer_finalize_cb, core, pkt);
+    }
+
+    ret = media_packet_get_number_of_video_planes(*pkt, &plane_num);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("media_packet_get_number_of_video_planes failed");
+        return MC_ERROR;
     }
 
     return MC_ERROR_NONE;
 }
 
-
-int __mc_fill_packet_with_mm_video_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt)
+int __mc_fill_video_packet_with_mm_video_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt)
 {
-    void* pkt_data = NULL;
-    MMVideoBuffer *imgb = NULL;
-    GstMapInfo map = GST_MAP_INFO_INIT;
+    void *pkt_data = NULL;
+    MMVideoBuffer *mm_vbuffer = NULL;
     int i;
     int bo_num = 0;
+
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
     mc_decoder_info_t *codec_info = (mc_decoder_info_t *)core->codec_info;
+    mm_vbuffer = (MMVideoBuffer *)data;
 
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
-
-    imgb = (MMVideoBuffer *)data;
-
-    LOGD("buf_share_method %d", imgb->type);
+    LOGD("buf_share_method %d", mm_vbuffer->type);
 
     LOGD("a[0] : %p, a[1] : %p, p[0] : %p, p[1] : %p",
-        imgb->data[0], imgb->data[1], imgb->handle.paddr[0], imgb->handle.paddr[1]);
+        mm_vbuffer->data[0], mm_vbuffer->data[1], mm_vbuffer->handle.paddr[0], mm_vbuffer->handle.paddr[1]);
     LOGD("s[0]:%d, e[0]:%d, w[0]:%d, h[0]:%d",
-        imgb->stride_width[0],imgb->stride_height[0],imgb->width[0], imgb->height[0]);
+        mm_vbuffer->stride_width[0], mm_vbuffer->stride_height[0], mm_vbuffer->width[0], mm_vbuffer->height[0]);
 
-    media_packet_create_alloc(core->output_fmt, __mc_output_buffer_finalize_cb, core, out_pkt);
-
-    if ( imgb->type == MM_VIDEO_BUFFER_TYPE_PHYSICAL_ADDRESS ) {
-        media_packet_set_buffer_size(*out_pkt, imgb->width[0]*imgb->height[0]*3/2);
+    if (mm_vbuffer->type == MM_VIDEO_BUFFER_TYPE_PHYSICAL_ADDRESS) {
+        media_packet_set_buffer_size(*out_pkt, mm_vbuffer->width[0]*mm_vbuffer->height[0]*3/2);
         media_packet_get_buffer_data_ptr(*out_pkt, &pkt_data);
 
-        __csc_tiled_to_linear_crop(pkt_data, imgb->data[0],
-                imgb->stride_width[0], imgb->stride_height[0], 0,0,0,0);
-        __csc_tiled_to_linear_crop(pkt_data+imgb->stride_width[0]*imgb->stride_height[0],
-                imgb->data[1], imgb->stride_width[0], imgb->stride_height[0]/2, 0,0,0,0);
-    }
-    else if ( imgb->type == MM_VIDEO_BUFFER_TYPE_DMABUF_FD ) {
+        __csc_tiled_to_linear_crop(pkt_data, mm_vbuffer->data[0],
+                mm_vbuffer->stride_width[0], mm_vbuffer->stride_height[0], 0, 0, 0, 0);
+        __csc_tiled_to_linear_crop(pkt_data+mm_vbuffer->stride_width[0]*mm_vbuffer->stride_height[0],
+                mm_vbuffer->data[1], mm_vbuffer->stride_width[0], mm_vbuffer->stride_height[0]/2, 0, 0, 0, 0);
+    } else if (mm_vbuffer->type == MM_VIDEO_BUFFER_TYPE_DMABUF_FD) {
         LOGD("FD type");
-    }
-    else if ( imgb->type == MM_VIDEO_BUFFER_TYPE_TBM_BO ) {
+    } else if (mm_vbuffer->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
         tbm_surface_h tsurf = NULL;
-
-#ifdef TBM_API_CHANGE
         tbm_surface_info_s tsurf_info;
         memset(&tsurf_info, 0x0, sizeof(tbm_surface_info_s));
-#endif
 
         /* create tbm surface */
         for (i = 0; i < MM_VIDEO_BUFFER_PLANE_MAX; i++) {
-            if (imgb->handle.bo[i]) {
+            if (mm_vbuffer->handle.bo[i]) {
                 bo_num++;
-#ifdef TBM_API_CHANGE
-                tsurf_info.planes[i].stride = imgb->stride_width[i];
-#endif
+                tsurf_info.planes[i].stride = mm_vbuffer->stride_width[i];
             }
         }
 
-        if ( bo_num > 0 ) {
-#ifdef TBM_API_CHANGE
+        if (bo_num > 0) {
             tsurf_info.width = codec_info->width;
             tsurf_info.height = codec_info->height;
-            tsurf_info.format = TBM_FORMAT_NV12;          // bo_format
+            tsurf_info.format = TBM_FORMAT_NV12;        /* bo_format */
             tsurf_info.bpp = tbm_surface_internal_get_bpp(TBM_FORMAT_NV12);
             tsurf_info.num_planes = tbm_surface_internal_get_num_planes(TBM_FORMAT_NV12);
             tsurf_info.size = 0;
 
-            for ( i = 0; i < tsurf_info.num_planes; i++ ) {
-                tsurf_info.planes[i].stride = imgb->stride_width[i];
-                tsurf_info.planes[i].size = imgb->stride_width[i] * imgb->stride_height[i];
+            for (i = 0; i < tsurf_info.num_planes; i++) {
+                tsurf_info.planes[i].stride = mm_vbuffer->stride_width[i];
+                tsurf_info.planes[i].size = mm_vbuffer->stride_width[i] * mm_vbuffer->stride_height[i];
 
-                if ( i < bo_num )
+                if (i < bo_num)
                     tsurf_info.planes[i].offset = 0;
                 else
-                    tsurf_info.planes[i].offset = tsurf_info.planes[i - 1].size;
+                    tsurf_info.planes[i].offset = tsurf_info.planes[i-1].offset + tsurf_info.planes[i - 1].size;
 
                 tsurf_info.size += tsurf_info.planes[i].size;
             }
-
-            tsurf = tbm_surface_internal_create_with_bos ( &tsurf_info, (tbm_bo *)imgb->handle.bo, bo_num );
-            LOGD("[NEW API] tbm surface %p", tsurf);
-#else
-            tsurf = tbm_surface_internal_create_with_bos ( codec_info->width, codec_info->height,
-                        TBM_FORMAT_NV12, (tbm_bo *)imgb->handle.bo, bo_num );
-            LOGD ( "[OLD  API] tbm surface %p", tsurf );
-#endif
+            LOGD("%d plane stride : %d, size : %d",tsurf_info.planes[i].stride, tsurf_info.planes[i].size);
+            tsurf = tbm_surface_internal_create_with_bos(&tsurf_info, (tbm_bo *)mm_vbuffer->handle.bo, bo_num);
         }
 
-        if ( tsurf ) {
-            media_packet_create_from_tbm_surface ( core->output_fmt, tsurf,
-                ( media_packet_finalize_cb )__mc_output_buffer_finalize_cb, core, out_pkt );
+        if (tsurf) {
+            media_packet_create_from_tbm_surface(core->output_fmt, tsurf,
+                (media_packet_finalize_cb)__mc_output_buffer_finalize_cb, core, out_pkt);
         }
     }
-
-DONE:
 
     return MC_ERROR_NONE;
 }
 
-int __mc_fill_outbuf_with_packet(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt)
+int __mc_fill_packet_with_outbuf(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt)
 {
-    void* pkt_data = NULL;
+    void *pkt_data = NULL;
+    int ret = MC_ERROR_NONE;
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
-
-
-    media_packet_create_alloc(core->output_fmt, __mc_output_buffer_finalize_cb, core, out_pkt);
+    ret = media_packet_create_alloc(core->output_fmt, __mc_output_buffer_finalize_cb, core, out_pkt);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("media_packet_create_alloc failed");
+        return MC_ERROR;
+    }
 
     media_packet_set_buffer_size(*out_pkt, size);
     media_packet_get_buffer_data_ptr(*out_pkt, &pkt_data);
@@ -350,57 +511,85 @@ int __mc_fill_outbuf_with_packet(mc_gst_core_t *core, void *data, int size, medi
     return MC_ERROR_NONE;
 }
 
-int __mc_fill_outbuf_with_h264_packet(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt)
+int __mc_fill_venc_packet_with_outbuf(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt)
 {
-    void* pkt_data = NULL;
-    int mask = 0xfffffff0;
+    void *pkt_data = NULL;
+    bool codec_config = FALSE;
+    bool sync_flag = FALSE;
+    bool slice = FALSE;
+    int codec_data_size = 0;
+    int ret = MC_ERROR_NONE;
 
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    if ( (core->out_mime & mask) == MEDIA_FORMAT_H264_SP)
-    {
-        _mc_check_out_bytestream(core, (unsigned char*)data, size);
+    switch (core->out_mime) {
+        case MEDIA_FORMAT_H264_SP:
+        case MEDIA_FORMAT_H264_MP:
+        case MEDIA_FORMAT_H264_HP:
+            ret = _mc_check_h264_bytestream((unsigned char *)data, size, 1, &codec_config, &sync_flag, &slice);
+            break;
+        case MEDIA_FORMAT_MPEG4_SP:
+        case MEDIA_FORMAT_MPEG4_ASP:
+            codec_data_size = _mc_check_mpeg4_out_bytestream((unsigned char *)data, size, &codec_config, &sync_flag);
+            break;
+        case MEDIA_FORMAT_H263:
+        case MEDIA_FORMAT_H263P:
+            if (!_mc_check_h263_out_bytestream((unsigned char *)data, size, &sync_flag))
+                return MC_INVALID_IN_BUF;
+            break;
+        default:
+            return MC_INVALID_IN_BUF;
+    }
+    LOGD("codec_config : %d, sync_flag : %d, slice : %d", codec_config, sync_flag, slice);
+
+    ret = media_packet_create_alloc(core->output_fmt, __mc_output_buffer_finalize_cb, core, out_pkt);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("media_packet_create_alloc failed");
+        return MC_ERROR;
     }
 
-    if ( core->sps_size > 0 && core->pps_size > 0 ) {
+    media_packet_set_buffer_size(*out_pkt, size);
+    media_packet_get_buffer_data_ptr(*out_pkt, &pkt_data);
+    memcpy(pkt_data, data, size);
 
-        media_packet_create_alloc(core->output_fmt, __mc_output_buffer_finalize_cb, core, out_pkt);
-        media_packet_set_buffer_size(*out_pkt, size);
-        media_packet_get_buffer_data_ptr(*out_pkt, &pkt_data);
-        memcpy(pkt_data, data, size);
+    core->need_sync_flag = sync_flag ? 1 : 0;
+    core->need_codec_data = codec_config ? 1 : 0;
 
-        if ( core->need_codec_data ) {
-            media_packet_set_codec_data(*out_pkt, core->codec_data, core->codec_data_size);
-        }
-
-    }
-
-    return MC_ERROR_NONE;
+    return ret;
 }
 
-int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps)
-{
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+/*
+ * create_caps virtual functions
+*/
 
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t*)core->codec_info;
+int __mc_create_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    return core->vtable[create_caps](core, caps, buff, codec_config);
+}
+
+int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
 
     *caps = gst_caps_new_simple("video/x-raw",
-                        "format", G_TYPE_STRING, "I420",
-                        "width", G_TYPE_INT, enc_info->width,
-                        "height", G_TYPE_INT, enc_info->height,
-                        "framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
-                        NULL);
+            "format", G_TYPE_STRING, "I420",
+            "width", G_TYPE_INT, enc_info->width,
+            "height", G_TYPE_INT, enc_info->height,
+            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
+            NULL);
 
     LOGD("%d, %d, %d", enc_info->width, enc_info->height, enc_info->fps);
 
     return MC_ERROR_NONE;
 }
 
-int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t*)core->codec_info;
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
 
     *caps = gst_caps_new_simple(core->mime,
             "format", G_TYPE_STRING, "SN12",
@@ -408,8 +597,8 @@ int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps)
             "height", G_TYPE_INT, enc_info->height,
             "framerate", GST_TYPE_FRACTION, enc_info->fps, 1, NULL);
 
-    g_object_set (GST_OBJECT(core->codec), "byte-stream", TRUE, NULL);
-    g_object_set (GST_OBJECT(core->codec), "bitrate", enc_info->bitrate*1000, NULL);
+    g_object_set(GST_OBJECT(core->codec), "byte-stream", TRUE, NULL);
+    g_object_set(GST_OBJECT(core->codec), "bitrate", enc_info->bitrate*1000, NULL);
 
     LOGD("%s, %d, %d, %d", core->format, enc_info->width, enc_info->height, enc_info->fps);
 
@@ -417,30 +606,71 @@ int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps)
     return MC_ERROR_NONE;
 }
 
-int __mc_h264dec_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_sprdenc_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t*)core->codec_info;
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
+
+    *caps = gst_caps_new_simple("video/x-raw",
+            "format", G_TYPE_STRING, "SN12",
+            "width", G_TYPE_INT, enc_info->width,
+            "height", G_TYPE_INT, enc_info->height,
+            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1, NULL);
+
+    g_object_set(GST_OBJECT(core->codec), "bitrate", enc_info->bitrate*1000, NULL);
+
+    LOGD("%s, %d, %d, %d", core->format, enc_info->width, enc_info->height, enc_info->fps);
+
+
+    return MC_ERROR_NONE;
+}
+
+int __mc_h264dec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
 
     LOGD("%d, %d, ", dec_info->width, dec_info->height);
     *caps = gst_caps_new_simple(core->mime,
-                                "parsed", G_TYPE_BOOLEAN, TRUE,
-                                "alignment", G_TYPE_STRING, "au",
-                                "stream-format", G_TYPE_STRING, "byte-stream",
-                                "width", G_TYPE_INT, dec_info->width,
-                                "height", G_TYPE_INT, dec_info->height, NULL);
+            "parsed", G_TYPE_BOOLEAN, TRUE,
+            "alignment", G_TYPE_STRING, "au",
+            "stream-format", G_TYPE_STRING, "byte-stream",
+            "width", G_TYPE_INT, dec_info->width,
+            "height", G_TYPE_INT, dec_info->height, NULL);
 
     LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
     return MC_ERROR_NONE;
 }
 
-int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_sprddec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
 
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t*)core->codec_info;
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+
+    LOGD("%d, %d, ", dec_info->width, dec_info->height);
+
+    *caps = gst_caps_new_simple(core->mime,
+            "mpegversion", G_TYPE_INT, 4,
+            "width", G_TYPE_INT, dec_info->width,
+            "height", G_TYPE_INT, dec_info->height,
+            "framerate", GST_TYPE_FRACTION, 30, 1,
+            NULL);
+
+    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
+
+    return MC_ERROR_NONE;
+}
+
+int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
 
     LOGD("%d, %d, ", dec_info->width, dec_info->height);
     *caps = gst_caps_new_simple(core->mime,
@@ -453,32 +683,72 @@ int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps)
     return MC_ERROR_NONE;
 }
 
-int __mc_vdec_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_vdec_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t*)core->codec_info;
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
 
     *caps = gst_caps_new_simple(core->mime,
-                                "alignment", G_TYPE_STRING, "au",
-                                "stream-format", G_TYPE_STRING, "byte-stream", NULL);
+            "variant", G_TYPE_STRING, "itu", NULL);
 
     LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
     return MC_ERROR_NONE;
 }
 
-int __mc_aenc_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_vdec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t*)core->codec_info;
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+
+    *caps = gst_caps_new_simple(core->mime,
+            "mpegversion", G_TYPE_INT, 4,
+            "systemstream", G_TYPE_BOOLEAN, false, NULL);
+
+    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
+    return MC_ERROR_NONE;
+}
+
+int __mc_vdec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+
+    *caps = gst_caps_new_simple(core->mime,
+            "alignment", G_TYPE_STRING, "au",
+            "stream-format", G_TYPE_STRING, "byte-stream", NULL);
+
+    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
+    return MC_ERROR_NONE;
+}
+
+int __mc_vdec_h264_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+
+    *caps = gst_caps_new_simple(core->mime,
+            "alignment", G_TYPE_STRING, "au",
+            "stream-format", G_TYPE_STRING, "byte-stream", NULL);
+
+    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
+    return MC_ERROR_NONE;
+}
+
+int __mc_aenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
 
     *caps = gst_caps_new_simple(core->mime,
             "rate", G_TYPE_INT, enc_info->samplerate,
             "channels", G_TYPE_INT, enc_info->channel,
             "format", G_TYPE_STRING, "F32LE",
-            "layout", G_TYPE_STRING, "interleaved",
-            NULL);
+            "layout", G_TYPE_STRING, "interleaved", NULL);
 
 /*
 +----GstAudioEncoder
@@ -494,18 +764,37 @@ Element Properties:
                                 (-1): unofficial       - Allow unofficial extensions
                                 (-2): experimental  - Allow nonstandardized experimental things
 */
-    g_object_set (GST_OBJECT(core->codec), "compliance", -2, NULL);
+    g_object_set(GST_OBJECT(core->codec), "compliance", -2, NULL);
 
     LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, enc_info->samplerate, enc_info->channel);
 
     return MC_ERROR_NONE;
 }
 
-int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_aenc_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t*)core->codec_info;
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
+
+    *caps = gst_caps_new_simple(core->mime,
+            "rate", G_TYPE_INT, enc_info->samplerate,
+            "channels", G_TYPE_INT, enc_info->channel,
+            "format", G_TYPE_STRING, "F32LE",
+            "layout", G_TYPE_STRING, "interleaved", NULL);
+
+    g_object_set(GST_OBJECT(core->codec), "compliance", -2, NULL);
+
+    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, enc_info->samplerate, enc_info->channel);
+
+    return MC_ERROR_NONE;
+}
+
+int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
 
     *caps = gst_caps_new_simple(core->mime,
             "rate", G_TYPE_INT, enc_info->samplerate,
@@ -515,14 +804,16 @@ int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps)
             NULL);
 
     LOGD("mime : %s,  samplerate :%d, channel : %d", core->mime, enc_info->samplerate, enc_info->channel);
+
     return MC_ERROR_NONE;
 }
 
-int __mc_adec_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_adec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    int ret = MC_ERROR_NONE;
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t*)core->codec_info;
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
 
     LOGD("CAPS for codec_id (MEDIACODEC_AAC_LC - normal ADTS)");
     *caps = gst_caps_new_simple(core->mime,
@@ -533,35 +824,85 @@ int __mc_adec_caps(mc_gst_core_t *core, GstCaps **caps)
             "channels", G_TYPE_INT, dec_info->channel,
             NULL);
 
+    if (codec_config && (!core->encoder)) {
+        guint codecdata_size = 16;         /*AAC_CODECDATA_SIZE = 16 (in testsuit)*/
+        ret = __mc_set_caps_codecdata(core, caps, buff, codecdata_size);
+        if (ret != MC_ERROR_NONE) {
+            LOGW("__mc_set_caps_codecdata failed");
+            return ret;
+        }
+    }
+
     LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
-    return MC_ERROR_NONE;
+
+    return ret;
 }
 
-int __mc_adec_aacv12_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_adec_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    int ret = MC_ERROR_NONE;
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t*)core->codec_info;
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
 
-    LOGD("CAPS for codec_id (MEDIACODEC_AAC_HE and _PS - MP4/M4A case)");
+    LOGD("CAPS for codec_id (MEDIACODEC_AAC_LC - normal ADTS)");
     *caps = gst_caps_new_simple(core->mime,
-            "mpegversion", G_TYPE_INT, 4,                       //ToDo : need adding version /profile
             "framed", G_TYPE_BOOLEAN, TRUE,
-            "stream-format", G_TYPE_STRING, "raw",
+            "mpegversion", G_TYPE_INT, 4,
+            "stream-format", G_TYPE_STRING, "adts",
             "rate", G_TYPE_INT, dec_info->samplerate,
             "channels", G_TYPE_INT, dec_info->channel,
             NULL);
 
+    if (codec_config && (!core->encoder)) {
+        guint codecdata_size = 16;         /*AAC_CODECDATA_SIZE = 16 (in testsuit)*/
+        ret = __mc_set_caps_codecdata(core, caps, buff, codecdata_size);
+        if (ret != MC_ERROR_NONE) {
+            LOGW("__mc_set_caps_codecdata failed");
+            return ret;
+        }
+    }
+
     LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
 
-    return MC_ERROR_NONE;
+    return ret;
 }
 
-int __mc_adec_mp3_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_adec_aacv12_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    int ret = MC_ERROR_NONE;
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t*)core->codec_info;
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+
+    LOGD("CAPS for codec_id (MEDIACODEC_AAC_HE and _PS - MP4/M4A case)");
+    *caps = gst_caps_new_simple(core->mime,
+            "mpegversion", G_TYPE_INT, 4,     /*TODO : need adding version /profile*/
+            "framed", G_TYPE_BOOLEAN, TRUE,
+            "stream-format", G_TYPE_STRING, "raw",
+            "channels", G_TYPE_INT, dec_info->channel,
+            "rate", G_TYPE_INT, dec_info->samplerate,
+            NULL);
+
+    if (codec_config && (!core->encoder)) {
+        guint codecdata_size = 16;         /*AAC_CODECDATA_SIZE = 16 (in testsuit)*/
+        ret = __mc_set_caps_codecdata(core, caps, buff, codecdata_size);
+        if (ret != MC_ERROR_NONE) {
+            LOGW("__mc_set_caps_codecdata failed");
+            return ret;
+        }
+    }
+
+    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
+
+    return ret;
+}
+
+int __mc_adec_mp3_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
 
     *caps = gst_caps_new_simple(core->mime,
             "framed", G_TYPE_BOOLEAN, TRUE,
@@ -577,11 +918,11 @@ int __mc_adec_mp3_caps(mc_gst_core_t *core, GstCaps **caps)
     return MC_ERROR_NONE;
 }
 
-int __mc_adec_amrnb_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_adec_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t*)core->codec_info;
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
 
     *caps = gst_caps_new_simple(core->mime,
             "rate", G_TYPE_INT, 8000,
@@ -593,11 +934,11 @@ int __mc_adec_amrnb_caps(mc_gst_core_t *core, GstCaps **caps)
     return MC_ERROR_NONE;
 }
 
-int __mc_adec_amrwb_caps(mc_gst_core_t *core, GstCaps **caps)
+int __mc_adec_amrwb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
 {
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t*)core->codec_info;
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
 
     *caps = gst_caps_new_simple(core->mime,
             "rate", G_TYPE_INT, 16000,
@@ -609,50 +950,407 @@ int __mc_adec_amrwb_caps(mc_gst_core_t *core, GstCaps **caps)
     return MC_ERROR_NONE;
 }
 
+int __mc_adec_vorbis_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+    int ret = MC_ERROR_NONE;
+
+    *caps = gst_caps_new_simple(core->mime,
+            "channels", G_TYPE_INT, dec_info->channel,
+            "rate", G_TYPE_INT, dec_info->samplerate,
+            /* FIXME - Insert 'Stream Header' */
+            NULL);
+
+    LOGD(" ----- VORBIS Need Additional Caps -----------");
+    /*
+      * Need to extract from each Stream header ... or
+      * Need to get Demuxer's Caps from each Stream heade
+      */
+    if (codec_config && (!core->encoder)) {
+        guint streamheader_size = 4096;         /* VORBIS_CODECDATA_SIZE = 4096 */
+        ret = __mc_set_caps_streamheader(core, caps, buff, streamheader_size);
+        if (ret != MC_ERROR_NONE) {
+            LOGW("__mc_set_caps_streamheader failed");
+            return ret;
+        }
+    }
+
+    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
+
+    return ret;
+}
+
+int __mc_adec_flac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+    int ret = MC_ERROR_NONE;
+
+    *caps = gst_caps_new_simple(core->mime,
+            "channels", G_TYPE_INT, dec_info->channel,
+            "rate", G_TYPE_INT, dec_info->samplerate,
+            "framed", G_TYPE_BOOLEAN, TRUE,
+            /* FIXME - Insert More Info */
+            NULL);
+
+    LOGD(" ----- FLAC Need Additional Caps -----------");
+    /*
+      * Need to extract from each Stream header ... or
+      * Need to get Demuxer's Caps from each Stream heade
+      */
+    if (codec_config && (!core->encoder)) {
+        guint streamheader_size = 4096;         /* FLAC_CODECDATA_SIZE = 4096 */
+        ret = __mc_set_caps_streamheader(core, caps, buff, streamheader_size);
+        if (ret != MC_ERROR_NONE) {
+            LOGW("__mc_set_caps_streamheader failed");
+            return ret;
+        }
+    }
+
+    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
+
+    return ret;
+}
+
+int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
+{
+    int ret = MC_ERROR_NONE;
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+
+    /*
+      * Need to extract from Stream Type Specific ... or
+      * Need to get Demuxer's Caps from Stream Type Specific
+      */
+    guint16 format_tag = 0;
+    gint wma_version = 0;
+    gint block_align = 1024;      /*FIXME : Need checking */
+    gint bitrate = 128000;        /*FIXME : Need checking */
+
+    LOGD(" ----- WMA Need Additional Caps -----------");
+    if (core->codec_id == MEDIACODEC_WMAV1) {
+        format_tag = 352;       /* 0x160 */
+        wma_version = 1;
+    } else if (core->codec_id == MEDIACODEC_WMAV2) {
+        format_tag = 353;       /* 0x161 */
+        wma_version = 2;
+    } else if (core->codec_id == MEDIACODEC_WMAPRO) {
+        format_tag = 354;       /* 0x162 */
+        wma_version = 3;
+    } else if (core->codec_id == MEDIACODEC_WMAPRO) {
+        format_tag = 355;       /* 0x163 */
+        wma_version = 3;
+    } else {
+        LOGE("Not support WMA format");
+    }
+
+    *caps = gst_caps_new_simple(core->mime,
+            "rate", G_TYPE_INT, dec_info->samplerate,
+            "channels", G_TYPE_INT, dec_info->channel,
+            "bitrate", G_TYPE_INT, bitrate,
+            "depth", G_TYPE_INT, dec_info->bit,
+            /* FIXME - Need More Info */
+            "wmaversion", G_TYPE_INT, wma_version,
+            "format_tag", G_TYPE_INT, format_tag,
+            "block_align", G_TYPE_INT, block_align,
+            NULL);
+
+    if (codec_config && (!core->encoder)) {
+        guint codecdata_size = 64;         /* WMA_CODECDATA_SIZE = 64 */
+        ret = __mc_set_caps_codecdata(core, caps, buff, codecdata_size);
+        if (ret != MC_ERROR_NONE) {
+            LOGW("__mc_set_caps_codecdata failed");
+            return ret;
+        }
+    }
+
+    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
+
+    return ret;
+}
+
+/**
+ * _gst_caps_set_buffer_array:
+ * @caps: a #GstCaps
+ * @field: field in caps to set
+ * @buf: header buffers
+ *
+ * Adds given buffers to an array of buffers set as the given @field
+ * on the given @caps.  List of buffer arguments must be NULL-terminated.
+ *
+ * Returns: input caps with a streamheader field added, or NULL if some error
+ */
+static GstCaps *__mc_gst_caps_set_buffer_array(GstCaps * caps, const gchar * field, GstBuffer * buf, ...)
+{
+    GstStructure *structure = NULL;
+    va_list va;
+    GValue array = { 0 };
+    GValue value = { 0 };
+
+    g_return_val_if_fail(caps != NULL, NULL);
+    g_return_val_if_fail(gst_caps_is_fixed(caps), NULL);
+    g_return_val_if_fail(field != NULL, NULL);
+
+    caps = gst_caps_make_writable(caps);
+    structure = gst_caps_get_structure(caps, 0);
+
+    g_value_init(&array, GST_TYPE_ARRAY);
+
+    va_start(va, buf);
+    /* put buffers in a fixed list */
+    while (buf) {
+        g_value_init(&value, GST_TYPE_BUFFER);
+        gst_value_set_buffer(&value, buf);
+        gst_value_array_append_value(&array, &value);
+        g_value_unset(&value);
+
+        buf = va_arg(va, GstBuffer *);
+    }
+    va_end(va);
+
+    gst_structure_take_value(structure, field, &array);
+
+    return caps;
+}
+
+
+int __mc_set_caps_streamheader(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer*buff, guint streamheader_size)
+{
+    int ret = MEDIA_PACKET_ERROR_NONE;
+    void *buf_data = NULL;
+    uint64_t buf_size = 0;
+    GstBuffer *header1, *header2, *header3;
+    guint hsize1, hsize2, hsize3;
+    GstBuffer *tmp_header;
+    guint8 *tmp_buf = NULL;
+    GstMapInfo map;
+
+    ret = media_packet_get_buffer_size(buff->pkt, &buf_size);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("buffer size get fail");
+        return ret;
+    }
+
+    ret = media_packet_get_buffer_data_ptr(buff->pkt, &buf_data);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("buffer size get fail");
+        return ret;
+    }
+
+    LOGD("Set caps for streamheader in mime : %s and codec_id (0x%x)", core->mime, core->codec_id);
+
+    if (core->codec_id == MEDIACODEC_VORBIS) {
+        /*
+          * hsize1 : Identification Header (packet type 1) - fixed 30 byte
+          * hsize2 : Comment Header (packet type 3) - variable byte (need calculate)
+          * hsize3 : Setup Header (packet type 5) - variable byte (Used remained bytes)
+        */
+
+        /* First of all, Need to fins and calculate size of hsize2 */
+        tmp_header = gst_buffer_new_and_alloc(streamheader_size);
+        gst_buffer_fill(tmp_header, 0, buf_data, streamheader_size);
+        gst_buffer_map(tmp_header, &map, GST_MAP_READ);
+        tmp_buf = map.data;
+        tmp_buf += (30 + 7);                /* hsize1 + '0x03' + 'vorbis'*/
+        hsize2 = (7 + 4);
+        hsize2 += GST_READ_UINT32_LE(tmp_buf);
+        hsize2 += (4 + 1);
+        LOGD("Find streamheader hsize2(%d)", hsize2);
+        gst_buffer_unmap(tmp_header, &map);
+        gst_buffer_unref(tmp_header);
+
+        /*  hsize1 : Identification Header (packet type 1) - fixed 30 byte */
+        hsize1 = 30;
+        header1 = gst_buffer_new_and_alloc(hsize1);
+        gst_buffer_fill(header1, 0, buf_data, hsize1);
+        gst_buffer_map(header1, &map, GST_MAP_READ);
+        tmp_buf = map.data;
+        /* '0x01' + 'vorbis' */
+        if (*tmp_buf != 0x01) {
+            LOGE("[ERROR] Invalid Caps of Stream header1");
+            gst_buffer_unmap(header1, &map);
+            return MEDIA_PACKET_ERROR_INVALID_PARAMETER;
+        }
+        gst_buffer_unmap(header1, &map);
+
+        /* hsize2 : Comment Header (packet type 3) - variable byte */
+        header2 = gst_buffer_new_and_alloc(hsize2);
+        gst_buffer_fill(header2, 0,  (buf_data + (hsize1)), hsize2);
+        gst_buffer_map(header2, &map, GST_MAP_READ);
+        tmp_buf = map.data;
+        /* '0x03' + 'vorbis' */
+        if (*tmp_buf != 0x03) {
+            LOGE("[ERROR] Invalid Caps of Stream header2");
+            gst_buffer_unmap(header2, &map);
+            return MEDIA_PACKET_ERROR_INVALID_PARAMETER;
+        }
+        gst_buffer_unmap(header2, &map);
+
+        /* hsize3 : Setup Header (packet type 5) - variable byte */
+        hsize3 = streamheader_size - (hsize1 + hsize2);
+        header3 = gst_buffer_new_and_alloc(hsize3);
+        gst_buffer_fill(header3, 0,  (buf_data + (hsize1 + hsize2)), hsize3);
+        gst_buffer_map(header3, &map, GST_MAP_READ);
+        tmp_buf = map.data;
+        /* '0x05' + 'vorbis' */
+        if (*tmp_buf != 0x05) {
+            LOGE("[ERROR] Invalid Caps of Stream header3");
+            gst_buffer_unmap(header3, &map);
+            return MEDIA_PACKET_ERROR_INVALID_PARAMETER;
+        }
+        gst_buffer_unmap(header3, &map);
+
+        LOGD("[vorbis] streamheader hsize1 (%d) + hsize2 (%d) + hsize3 (%d) = Total (%d)",
+            hsize1, hsize2, hsize3, (hsize1 + hsize2 + hsize3));
+
+        __mc_gst_caps_set_buffer_array(*caps, "streamheader", header1, header2, header3, NULL);
+
+        gst_buffer_unref(header1);
+        gst_buffer_unref(header2);
+        gst_buffer_unref(header3);
+    } else if (core->codec_id == MEDIACODEC_FLAC) {
+        /*
+          * hsize1 : Stream Info (type 0) - fixed 51 byte
+          * hsize2 : Stream Comment (type 4) - variable byte (need calculate)
+        */
+
+        /* First of all, Need to fins and calculate size of hsize2 */
+        tmp_header = gst_buffer_new_and_alloc(streamheader_size);
+        gst_buffer_fill(tmp_header, 0, buf_data, streamheader_size);
+        gst_buffer_map(tmp_header, &map, GST_MAP_READ);
+        tmp_buf = map.data;
+        hsize2 = 4 + ((tmp_buf[52] << 16) | (tmp_buf[53] << 8) | (tmp_buf[54]));
+        LOGD("Find streamheader hsize2(%d)", hsize2);
+        gst_buffer_unmap(tmp_header, &map);
+        gst_buffer_unref(tmp_header);
+
+        /*  hsize1 :  Stream Info (type 0) - fixed 51 byte */
+        hsize1 = 51;
+        header1 = gst_buffer_new_and_alloc(hsize1);
+        gst_buffer_fill(header1, 0, buf_data, hsize1);
+        gst_buffer_map(header1, &map, GST_MAP_READ);
+        tmp_buf = map.data;
+        /* '0x7f' + 'FLAC' */
+        if (*tmp_buf != 0x07f) {
+            LOGE("[ERROR] Invalid Caps of Stream header1 (Info)");
+            gst_buffer_unmap(header1, &map);
+            gst_buffer_unref(header1);
+            return MEDIA_PACKET_ERROR_INVALID_PARAMETER;
+        }
+        gst_buffer_unmap(header1, &map);
+
+        /* hsize2 : Stream Comment (type 4) - variable byte (need calculate) */
+        header2 = gst_buffer_new_and_alloc(hsize2);
+        gst_buffer_fill(header2, 0, (buf_data + (hsize1)), hsize2);
+        gst_buffer_map(header2, &map, GST_MAP_READ);
+        tmp_buf = map.data;
+        /* '0x84' */
+        if (*tmp_buf != 0x84) {
+            LOGE("[ERROR] Invalid Caps of Stream header2 (Comment)");
+            gst_buffer_unmap(header2, &map);
+            gst_buffer_unref(header1);
+            gst_buffer_unref(header2);
+            return MEDIA_PACKET_ERROR_INVALID_PARAMETER;
+        }
+        gst_buffer_unmap(header2, &map);
+
+        LOGD("[flac] streamheader hsize1 (%d) + hsize2 (%d)  = Total (%d)", hsize1, hsize2, (hsize1 + hsize2));
+        __mc_gst_caps_set_buffer_array(*caps, "streamheader", header1, header2, NULL);
+        gst_buffer_unref(header1);
+        gst_buffer_unref(header2);
+    } else {
+        LOGE("Not support case of Stream header Caps");
+    }
+
+    /* Update gstbuffer's data ptr and size for using previous streamheader.*/
+    LOGD("BEFORE : buff->buffer of size %" G_GSIZE_FORMAT "", gst_buffer_get_size(buff->buffer));
+    gst_buffer_remove_memory_range(buff->buffer, streamheader_size, -1);
+    gst_buffer_set_size(buff->buffer, buf_size - streamheader_size);
+    LOGD("AFTER  : buff->buffer of size %" G_GSIZE_FORMAT "",  gst_buffer_get_size(buff->buffer));
+
+    return ret;
+}
+
+
+
+int __mc_set_caps_codecdata(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, guint codecdata_size)
+{
+    int ret = MEDIA_PACKET_ERROR_NONE;
+    void *buf_data = NULL;
+    uint64_t buf_size = 0;
+    GstBuffer *codecdata_buffer;
+
+    ret = media_packet_get_buffer_size(buff->pkt, &buf_size);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("buffer size get fail");
+        return ret;
+    }
+
+    ret = media_packet_get_buffer_data_ptr(buff->pkt, &buf_data);
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
+        LOGW("buffer size get fail");
+        return ret;
+    }
+
+    LOGD("Set caps for codec_data in mime : %s and codec_id (0x%x)", core->mime, core->codec_id);
+
+    /* Add the codec_data attribute to caps, if we have it */
+    codecdata_buffer = gst_buffer_new_and_alloc(codecdata_size);
+    gst_buffer_fill(codecdata_buffer, 0, buf_data, codecdata_size);
+
+    LOGD("setting codec_data from (packet) buf_data used codecdata_size (%d)", codecdata_size);
+
+    gst_caps_set_simple(*caps, "codec_data", GST_TYPE_BUFFER, codecdata_buffer, NULL);
+    gst_buffer_unref(codecdata_buffer);
+
+    /* Update gstbuffer's data ptr and size for using previous codec_data..*/
+    LOGD("BEFORE : buff->buffer of size %" G_GSIZE_FORMAT "",  gst_buffer_get_size(buff->buffer));
+    gst_buffer_remove_memory_range(buff->buffer, codecdata_size, -1);
+    gst_buffer_set_size(buff->buffer, buf_size - codecdata_size);
+    LOGD("AFTER  : buff->buffer of size %" G_GSIZE_FORMAT "",  gst_buffer_get_size(buff->buffer));
+
+    return ret;
+}
+
+
 int _mc_output_media_packet_new(mc_gst_core_t *core, bool video, bool encoder, media_format_mimetype_e out_mime)
 {
-    if(media_format_create(&core->output_fmt) != MEDIA_FORMAT_ERROR_NONE)
-    {
+    if (media_format_create(&core->output_fmt) != MEDIA_FORMAT_ERROR_NONE) {
         LOGE("media format create failed");
         return MC_ERROR;
     }
 
-    if(encoder)
-    {
+    if (encoder) {
         mc_encoder_info_t *info;
 
-        info = (mc_encoder_info_t*)core->codec_info;
+        info = (mc_encoder_info_t *)core->codec_info;
 
-        if (video)
-        {
+        if (video) {
             media_format_set_video_mime(core->output_fmt, out_mime);
             media_format_set_video_width(core->output_fmt, info->width);
             media_format_set_video_height(core->output_fmt, info->height);
             media_format_set_video_avg_bps(core->output_fmt, info->bitrate);
-        }
-        else
-        {
+        } else {
             media_format_set_audio_mime(core->output_fmt, out_mime);
             media_format_set_audio_channel(core->output_fmt, info->channel);
             media_format_set_audio_samplerate(core->output_fmt, info->samplerate);
             media_format_set_audio_bit(core->output_fmt, info->bit);
             media_format_set_audio_avg_bps(core->output_fmt, info->bitrate);
         }
-    }
-    else
-    {
+    } else {
         mc_decoder_info_t *info;
 
-        info = (mc_decoder_info_t*)core->codec_info;
+        info = (mc_decoder_info_t *)core->codec_info;
 
-        if (video)
-        {
+        if (video) {
             media_format_set_video_mime(core->output_fmt, out_mime);
             media_format_set_video_width(core->output_fmt, info->width);
             media_format_set_video_height(core->output_fmt, info->height);
-        }
-        else
-        {
+        } else {
             media_format_set_audio_mime(core->output_fmt, out_mime);
             media_format_set_audio_channel(core->output_fmt, info->channel);
             media_format_set_audio_samplerate(core->output_fmt, info->samplerate);
@@ -682,7 +1380,6 @@ mc_gst_core_t *mc_gst_core_new()
     core->available_queue->input = mc_async_queue_new();
 
     g_mutex_init(&core->eos_mutex);
-    g_mutex_init(&core->drain_mutex);
     g_cond_init(&core->eos_cond);
     g_mutex_init(&core->prepare_lock);
 
@@ -691,17 +1388,14 @@ mc_gst_core_t *mc_gst_core_new()
     core->need_codec_data = false;
     core->need_sync_flag = false;
     core->prepare_count = 0;
-    core->idr_count = 0;
-    core->sps_size = 0;
-    core->pps_size = 0;
+    core->queued_count = 0;
+    core->dequeued_count = 0;
 
-    if (!g_thread_supported()) {
-        g_thread_init(NULL);
-        LOGD("thread init");
-    }
     g_atomic_int_set(&core->available_queue->running, 1);
     core->available_queue->thread = g_thread_new("feed thread", &feed_task, core);
 
+    core->bufmgr = NULL;
+    core->drm_fd = -1;
     LOGD("gst_core(%p) is created", core);
 
     MEDIACODEC_FLEAVE();
@@ -723,7 +1417,6 @@ void mc_gst_core_free(mc_gst_core_t *core)
     g_atomic_int_set(&async_queue->running, 0);
     g_thread_join(async_queue->thread);
 
-	  g_mutex_clear(&core->drain_mutex);
     g_mutex_clear(&core->eos_mutex);
     g_mutex_clear(&core->prepare_lock);
     g_cond_clear(&core->eos_cond);
@@ -783,27 +1476,9 @@ void mc_gst_port_free(mc_gst_port_t *port)
     return;
 }
 
-static void print_pad_capabilities(GstElement *element, gchar *pad_name)
+static void _mc_gst_update_caps(mc_gst_core_t *core, media_packet_h pkt, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
-    GstPad *pad = NULL;
-    GstCaps *caps = NULL;
-    gchar *format_str = NULL;
-    gchar *format_tmp = NULL;
-    GstStructure *structure;
-    int i;
-
-    pad = gst_element_get_static_pad(element, "src");
-
-    if (pad == NULL) {
-        LOGE("null pad");
-    }
-
-    caps = gst_pad_get_pad_template_caps(pad);
-}
-
-static void _mc_gst_update_caps(mc_gst_core_t *core, media_packet_h pkt, GstCaps **caps)
-{
-    //TODO remove is_hw param
+    /*TODO remove is_hw param*/
     core->format = __mc_get_gst_input_format(pkt, core->is_hw);
 
     GstPad *pad = NULL;
@@ -812,7 +1487,7 @@ static void _mc_gst_update_caps(mc_gst_core_t *core, media_packet_h pkt, GstCaps
     pad = gst_element_get_static_pad(core->codec, "src");
     template_caps = gst_pad_get_pad_template_caps(pad);
 
-    __mc_create_caps(core, caps);
+    __mc_create_caps(core, caps, buff, codec_config);
     g_object_set(core->appsrc, "caps", *caps, NULL);
 
     if (gst_caps_is_subset(*caps, template_caps)) {
@@ -820,70 +1495,34 @@ static void _mc_gst_update_caps(mc_gst_core_t *core, media_packet_h pkt, GstCaps
     }
 }
 
-static GstPadProbeReturn
-event_probe_cb(GstObject *pad, GstPadProbeInfo *info, gpointer user_data)
-{
-    mc_gst_core_t *core = (mc_gst_core_t*)user_data;
-    GstEvent *event = GST_PAD_PROBE_INFO_EVENT(info);
-
-    switch (GST_EVENT_TYPE (event)) {
-        case GST_EVENT_STREAM_START:
-            core->codec_config = true;
-            LOGD("codec_config is set %d, %d", input_count, count);
-            break;
-        default:
-            break;
-    }
-    return GST_PAD_PROBE_OK;
-}
-
 static gpointer feed_task(gpointer data)
 {
-    mc_gst_core_t *core = (mc_gst_core_t*)data;
+    mc_gst_core_t *core = (mc_gst_core_t *)data;
     int ret = MC_ERROR_NONE;
     bool codec_config = FALSE;
     bool eos = FALSE;
     media_packet_h in_buf = NULL;
-    GstMCBuffer* buff = NULL;
+    GstMCBuffer *buff = NULL;
     GstCaps *new_caps = NULL;
     bool initiative = true;
-    uint64_t wait_until = g_get_monotonic_time() + G_TIME_SPAN_SECOND / 2;
 
     MEDIACODEC_FENTER();
 
-    while(g_atomic_int_get(&core->available_queue->running))
-    {
+    while (g_atomic_int_get(&core->available_queue->running)) {
         LOGD("waiting for next input....");
         in_buf = _mc_get_input_buffer(core);
 
-        if(!in_buf)
+        if (!in_buf)
             goto LEAVE;
 
-        if(media_packet_is_codec_config(in_buf, &codec_config) != MEDIA_PACKET_ERROR_NONE)
-        {
+        if (media_packet_is_codec_config(in_buf, &codec_config) != MEDIA_PACKET_ERROR_NONE) {
             LOGE("media_packet_is_codec_config failed");
             goto ERROR;
         }
 
-        if(media_packet_is_end_of_stream(in_buf, &eos) != MEDIA_PACKET_ERROR_NONE)
-        {
+        if (media_packet_is_end_of_stream(in_buf, &eos) != MEDIA_PACKET_ERROR_NONE) {
             LOGE("media_packet_is_end_of_stream failed");
             goto ERROR;
-        }
-
-        if(codec_config)
-            initiative = true;
-
-        if (initiative) {
-            GstPad *pad;
-
-            _mc_gst_update_caps(core, in_buf, &new_caps);
-
-            pad = gst_element_get_static_pad(core->appsrc, "src");
-            gst_pad_push_event (pad, gst_event_new_stream_start("sejun"));
-            gst_object_unref(pad);
-
-            LOGD("caps updated");
         }
 
         buff = _mc_gst_media_packet_to_gstbuffer(core, &new_caps, in_buf, codec_config);
@@ -891,77 +1530,56 @@ static gpointer feed_task(gpointer data)
             LOGW("gstbuffer can't make");
             goto ERROR;
         }
-        LOGD("gstbuffer refcount %d", GST_MINI_OBJECT_REFCOUNT_VALUE(buff));
 
-        g_mutex_lock(&core->drain_mutex);
+        if (codec_config)
+            initiative = true;
+
+        if (initiative) {
+            GstPad *pad;
+
+            _mc_gst_update_caps(core, in_buf, &new_caps, buff, codec_config);
+
+            pad = gst_element_get_static_pad(core->appsrc, "src");
+            gst_pad_push_event(pad, gst_event_new_stream_start("sejun"));
+            gst_object_unref(pad);
+
+            LOGD("caps updated");
+        }
+
         /* inject buffer */
         ret = _mc_gst_gstbuffer_to_appsrc(core, buff);
-        if(ret != GST_FLOW_OK)
-        {
+        if (ret != GST_FLOW_OK) {
             LOGE("Failed to push gst buffer");
-            g_mutex_unlock(&core->drain_mutex);
             goto ERROR;
         }
-        LOGD("after refcount %d", GST_MINI_OBJECT_REFCOUNT_VALUE(buff));
-        LOGD("gst_app_src_get_current_level_bytes :%"G_GUINT64_FORMAT "\n", core->appsrc);
 
         initiative = false;
-        g_mutex_unlock(&core->drain_mutex);
 
-#if 1
-        if (eos)
-        {
-            GstPad *pad;
+        if (eos) {
             LOGD("end of stream");
-#if 0
-            pad = gst_element_get_static_pad(core->appsrc, "src");
-            gst_pad_push_event (pad, gst_event_new_eos() );
-            gst_object_unref(pad);
-#else
-            //goto EOS;
-
-            //g_signal_emit_by_name(core->appsrc, "end-of-stream", &ret);
-            gst_app_src_end_of_stream ( core->appsrc );
-#endif
-
-            while(!core->eos)
-            {
-                LOGD("waiting for eos signal...");
-                if(!g_cond_wait_until(&core->eos_cond, &core->eos_mutex, wait_until))
-                {
-                    core->eos = true;
-                    LOGD("time out");
-                }
-                else
-                    LOGD("recevied signal");
-            }
-
-            core->eos = false;
+            gst_app_src_end_of_stream(GST_APP_SRC(core->appsrc));
+            _mc_wait_for_eos(core);
             initiative = true;
-#endif
-
         }
+
+
         continue;
 ERROR:
-
-        g_mutex_lock(&core->drain_mutex);
         _mc_gst_set_flush_input(core);
-        g_mutex_unlock(&core->drain_mutex);
 
-        if (core->user_cb[_MEDIACODEC_EVENT_TYPE_ERROR])
-        {
-            ((mc_error_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_ERROR])(MC_INTERNAL_ERROR, core->user_data[_MEDIACODEC_EVENT_TYPE_ERROR]);
+        if (core->user_cb[_MEDIACODEC_EVENT_TYPE_ERROR]) {
+            ((mc_error_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_ERROR])
+                (MC_INTERNAL_ERROR, core->user_data[_MEDIACODEC_EVENT_TYPE_ERROR]);
         }
 
         continue;
 LEAVE:
-        //LOGE("status : in_buf : %p, codec_config : %d, eos : %d, encoder : %d in feed_task", in_buf, codec_config, eos, core->encoder);
+        /*LOGE("status : in_buf : %p, codec_config : %d, eos : %d, encoder : %d in feed_task", in_buf, codec_config, eos, core->encoder);*/
 	continue;
 
     }
 
-    if(new_caps)
-    {
+    if (new_caps) {
         gst_caps_unref(new_caps);
     }
     LOGI("status : in_buf : %p, codec_config : %d, eos : %d, video : %d, encoder : %d in feed_task",
@@ -975,26 +1593,24 @@ LEAVE:
 
 static void __mc_gst_stop_feed(GstElement *pipeline, gpointer data)
 {
-    mc_gst_core_t *core = (mc_gst_core_t*)data;
+    mc_gst_core_t *core = (mc_gst_core_t *)data;
 
     LOGI("stop_feed called");
-    if (core->user_cb[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS])
-    {
+    if (core->user_cb[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS]) {
         ((mc_buffer_status_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS])
-                (MEDIACODEC_NEED_DATA, core->user_data[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS]);
+                (MEDIACODEC_ENOUGH_DATA, core->user_data[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS]);
     }
 }
 
 static void __mc_gst_start_feed(GstElement *pipeline, guint size, gpointer data)
 {
-    mc_gst_core_t *core = (mc_gst_core_t*)data;
+    mc_gst_core_t *core = (mc_gst_core_t *)data;
 
     LOGI("start_feed called");
 
-    if (core->user_cb[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS])
-    {
+    if (core->user_cb[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS]) {
         ((mc_buffer_status_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS])
-                (MEDIACODEC_ENOUGH_DATA, core->user_data[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS]);
+                (MEDIACODEC_NEED_DATA, core->user_data[_MEDIACODEC_EVENT_TYPE_BUFFER_STATUS]);
     }
 }
 
@@ -1002,23 +1618,23 @@ static int _mc_link_vtable(mc_gst_core_t *core, mediacodec_codec_type_e id, gboo
 {
     MEDIACODEC_FENTER();
 
-    g_return_val_if_fail (core != NULL, MC_PARAM_ERROR);
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    switch (id)
-    {
+    switch (id) {
         case MEDIACODEC_AAC:
         {
+            /* if set to 'CODEC_CONFIG', then It is also available case of  MEDIA_FORMAT_AAC_LC (RAW) */
             LOGD("aac lc (adts) vtable");
-            core->vtable = encoder ? aenc_vtable : adec_vtable;
+            core->vtable = encoder ? aenc_aac_vtable : adec_aac_vtable;
             break;
         }
         case MEDIACODEC_AAC_HE:
         case MEDIACODEC_AAC_HE_PS:
         {
             LOGD("aac he v12 vtable");
-            core->vtable = encoder ? aenc_vtable : adec_aacv12_vtable;
+            core->vtable = encoder ? aenc_aac_vtable : adec_aacv12_vtable;
             if (encoder) {
-                LOGD("[MC_NOT_SUPPORTED] aac encoder is not supported yet!!!");
+                LOGD("[MC_NOT_SUPPORTED] he-aac-v12 encoder is not supported yet!!!");
                 return MC_NOT_SUPPORTED;
             }
             break;
@@ -1031,7 +1647,6 @@ static int _mc_link_vtable(mc_gst_core_t *core, mediacodec_codec_type_e id, gboo
                 LOGD("[MC_NOT_SUPPORTED] mp3 encoder is not supported yet!!!");
                 return MC_NOT_SUPPORTED;
             }
-
             break;
         }
         case MEDIACODEC_AMR_NB:
@@ -1044,27 +1659,62 @@ static int _mc_link_vtable(mc_gst_core_t *core, mediacodec_codec_type_e id, gboo
         {
             LOGD("amrwb vtable - Only support decoder");
             core->vtable = encoder ? aenc_vtable : adec_amrwb_vtable;
+            if (encoder) {
+                LOGD("[MC_NOT_SUPPORTED] amr-wb encoder is not supported yet!!!");
+                return MC_NOT_SUPPORTED;
+            }
+            break;
+        }
+        case MEDIACODEC_VORBIS:
+        {
+            LOGD("vorbis vtable");
+            core->vtable = encoder ? aenc_vtable : adec_vorbis_vtable;
+            if (encoder) {
+                LOGD("[MC_NOT_SUPPORTED] vorbis encoder is not supported yet!!!");
+                return MC_NOT_SUPPORTED;
+            }
+            break;
+        }
+        case MEDIACODEC_FLAC:
+        {
+            LOGD("flac vtable");
+            core->vtable = encoder ? aenc_vtable : adec_flac_vtable;
+            if (encoder) {
+                LOGD("[MC_NOT_SUPPORTED] flac encoder is not supported yet!!!");
+                return MC_NOT_SUPPORTED;
+            }
+            break;
+        }
+        case MEDIACODEC_WMAV1:
+        case MEDIACODEC_WMAV2:
+        case MEDIACODEC_WMAPRO:
+        case MEDIACODEC_WMALSL:
+        {
+            LOGD("wma(V1 / V2 / LSL / PRO) vtable");
+            core->vtable = encoder ? aenc_vtable : adec_wma_vtable;
+            if (encoder) {
+                LOGD("[MC_NOT_SUPPORTED] wma encoder is not supported yet!!!");
+                return MC_NOT_SUPPORTED;
+            }
             break;
         }
         case MEDIACODEC_H263:
         {
             LOGD("h263 vtable");
-            core->vtable = encoder ? venc_vtable : vdec_vtable;
+            core->vtable = encoder ? (is_hw ? venc_h263_hw_vtable : venc_h263_sw_vtable) : is_hw ? vdec_h263_hw_vtable : vdec_h263_sw_vtable;
             break;
         }
         case MEDIACODEC_MPEG4:
         {
             LOGD("mpeg4 vtable");
-            core->vtable = encoder ? venc_vtable : vdec_vtable;
+            core->vtable = encoder ? (is_hw ? venc_mpeg4_hw_vtable : venc_mpeg4_sw_vtable) : is_hw ? vdec_mpeg4_hw_vtable : vdec_mpeg4_sw_vtable;
+
             break;
         }
         case MEDIACODEC_H264:
         {
             LOGD("h264 vtable");
-            if ( is_hw )
-                core->vtable = encoder ? venc_vtable : vdec_h264_vtable;
-            else
-                core->vtable = encoder ? venc_vtable : vdec_vtable;
+            core->vtable = encoder ? (is_hw ? venc_h264_hw_vtable : venc_vtable) : is_hw ? vdec_h264_hw_vtable : vdec_h264_sw_vtable;
             break;
         }
         default:
@@ -1080,7 +1730,8 @@ static int _mc_gst_gstbuffer_to_appsrc(mc_gst_core_t *core, GstMCBuffer *buff)
 
     int ret = MC_ERROR_NONE;
 
-    LOGD(" pushed buffer to appsrc : %p, buffer of size %" G_GSIZE_FORMAT "", buff->buffer, gst_buffer_get_size (buff->buffer));
+    LOGD("pushed buffer to appsrc : %p, buffer of size %" G_GSIZE_FORMAT "",
+        buff->buffer, gst_buffer_get_size(buff->buffer));
 
     ret = gst_app_src_push_buffer(GST_APP_SRC(core->appsrc), buff->buffer);
 
@@ -1099,6 +1750,7 @@ mc_ret_e mc_gst_prepare(mc_handle_t *mc_handle)
 
     int ret = MC_ERROR_NONE;
     media_format_mimetype_e out_mime;
+    int num_supported_codec=0;
     int i = 0;
 
     if (!mc_handle)
@@ -1109,62 +1761,62 @@ mc_ret_e mc_gst_prepare(mc_handle_t *mc_handle)
     bool encoder;
     bool hardware;
     gchar *factory_name = NULL;
-    static const mc_codec_map_t *codec_map;
+    mc_codec_map_t *codec_map;
 
     id = mc_handle->codec_id;
     video = mc_handle->is_video;
     encoder = mc_handle->is_encoder;
     hardware = mc_handle->is_hw;
+   codec_map = encoder ? mc_handle->encoder_map : mc_handle->decoder_map;
+    num_supported_codec = encoder ? mc_handle->num_supported_encoder : mc_handle->num_supported_decoder;
 
-    const int codec_list = encoder ? (sizeof(encoder_map) / sizeof(encoder_map[0])) : (sizeof(decoder_map) / sizeof(decoder_map[0]));
-
-    codec_map = encoder ? encoder_map : decoder_map;
-
-    for(i = 0; i < codec_list; i++)
-    {
-        if((id == codec_map[i].id) && (hardware == codec_map[i].hardware))
+    for (i = 0; i < num_supported_codec; i++){
+        if ((id == codec_map[i].id) && (hardware == codec_map[i].hardware))
             break;
     }
 
-    if( i == codec_list )
+    if (i == num_supported_codec)
         return MC_NOT_SUPPORTED;
 
     factory_name = codec_map[i].type.factory_name;
     out_mime = codec_map[i].type.out_format;
 
     /* gst_core create */
-    mc_gst_core_t* new_core = mc_gst_core_new();
+    mc_gst_core_t *new_core = mc_gst_core_new();
 
     new_core->mime = codec_map[i].type.mime;
     new_core->is_hw = hardware;
     new_core->eos = false;
     new_core->encoder = encoder;
     new_core->video = video;
-    new_core->codec_info = encoder ? (void*)&mc_handle->info.encoder : (void*)&mc_handle->info.decoder;
+    new_core->codec_info = encoder ? (void *)&mc_handle->info.encoder : (void *)&mc_handle->info.decoder;
     new_core->out_mime = codec_map[i].type.out_format;
+    new_core->codec_id = id;
+
+    new_core->bufmgr = tbm_bufmgr_init(new_core->drm_fd);
+    if (new_core->bufmgr == NULL) {
+        LOGE("TBM initialization failed");
+        return MC_ERROR;
+    }
 
     LOGD("@%p(%p) core is initializing...v(%d)e(%d)", mc_handle, new_core, new_core->video, new_core->encoder);
     LOGD("factory name : %s, output_fmt : %x", factory_name, out_mime);
 
     /* create media_packet for output fmt */
-    if ( (ret = _mc_output_media_packet_new(new_core, video, encoder, out_mime)) != MC_ERROR_NONE)
-    {
+    if ((ret = _mc_output_media_packet_new(new_core, video, encoder, out_mime)) != MC_ERROR_NONE) {
         LOGE("Failed to create output pakcet");
         return ret;
     }
 
     /* link vtable */
-    if((ret = _mc_link_vtable(new_core, id, encoder, hardware)) != MC_ERROR_NONE)
-    {
+    if ((ret = _mc_link_vtable(new_core, id, encoder, hardware)) != MC_ERROR_NONE) {
         LOGE("vtable link failed");
         return ret;
     }
 
-    for (i = 0; i < _MEDIACODEC_EVENT_TYPE_INTERNAL_FILLBUFFER ; i++)
-    {
+    for (i = 0; i < _MEDIACODEC_EVENT_TYPE_INTERNAL_FILLBUFFER ; i++) {
         LOGD("copy cb function [%d]", i);
-        if (mc_handle->user_cb[i])
-        {
+        if (mc_handle->user_cb[i]) {
             new_core->user_cb[i] = mc_handle->user_cb[i];
             new_core->user_data[i] = mc_handle->user_data[i];
             LOGD("user_cb[%d] %p, %p", i, new_core->user_cb[i], mc_handle->user_cb[i]);
@@ -1176,7 +1828,7 @@ mc_ret_e mc_gst_prepare(mc_handle_t *mc_handle)
     /* create basic core elements */
     ret = _mc_gst_create_pipeline(mc_handle->core, factory_name);
 
-    LOGD("initialized...");
+    LOGD("initialized... %d", ret);
     return ret;
 }
 
@@ -1187,35 +1839,47 @@ mc_ret_e mc_gst_unprepare(mc_handle_t *mc_handle)
     int i;
     int ret = MC_ERROR_NONE;
     mc_gst_core_t *core = NULL;
-    uint64_t wait_until = g_get_monotonic_time() + G_TIME_SPAN_SECOND / 2;
 
     if (!mc_handle)
         return MC_PARAM_ERROR;
 
-    core = (mc_gst_core_t*)mc_handle->core;
+    core = (mc_gst_core_t *)mc_handle->core;
 
-    if(core)
-    {
-        LOGD("@%p(%p) core is uninitializing... v(%d)e(%d)",mc_handle, core, core->video, core->encoder);
+    if (core) {
+        LOGD("@%p(%p) core is uninitializing... v(%d)e(%d)", mc_handle, core, core->video, core->encoder);
 
-        _mc_gst_flush_buffers (core);
+        if (core->eos) {
+            _mc_send_eos_signal(core);
+        }
+
+        _mc_gst_flush_buffers(core);
+
+
+        ret = _mc_gst_destroy_pipeline(core);
 
         /* unset callback */
-        for (i = 0; i < _MEDIACODEC_EVENT_TYPE_INTERNAL_FILLBUFFER ; i++)
-        {
+        for (i = 0; i < _MEDIACODEC_EVENT_TYPE_INTERNAL_FILLBUFFER; i++) {
             LOGD("unset cb function [%d]", i);
-            if (mc_handle->user_cb[i])
-            {
+            if (mc_handle->user_cb[i]) {
                 core->user_cb[i] = NULL;
                 core->user_data[i] = NULL;
                 LOGD("user_cb[%d] %p, %p", i, core->user_cb[i], mc_handle->user_cb[i]);
             }
         }
 
-        ret = _mc_gst_destroy_pipeline(core);
+        media_format_unref(core->output_fmt);
 
-        if(core != NULL)
-        {
+        if (core->bufmgr != NULL) {
+            tbm_bufmgr_deinit(core->bufmgr);
+            core->bufmgr = NULL;
+        }
+
+        if(core->drm_fd != -1) {
+            close(core->drm_fd);
+            LOGD("close drm_fd");
+        }
+
+        if (core != NULL) {
             mc_gst_core_free(core);
             mc_handle->core = NULL;
         }
@@ -1235,24 +1899,25 @@ mc_ret_e mc_gst_process_input(mc_handle_t *mc_handle, media_packet_h inbuf, uint
     if (!mc_handle)
         return MC_PARAM_ERROR;
 
-    core = (mc_gst_core_t*)mc_handle->core;
-    LOGI("@%p v(%d)e(%d)process_input", core, core->video, core->encoder);
-    LOGD("input buffer count :%d", input_count);
+    core = (mc_gst_core_t *)mc_handle->core;
 
-    g_get_current_time (&nowtv);
-    g_time_val_add (&nowtv, 500 * 1000 );   /* usec */
+    g_get_current_time(&nowtv);
+    g_time_val_add(&nowtv, 500 * 1000);   /* usec */
 /*
     if (!g_cond_timed_wait(&nowtv)) {
     }
 */
-    input_count++;
 
-    if(!core->eos)
+    if (core->prepare_count == 0)
+        return MEDIACODEC_ERROR_INVALID_STATE;
+
+    if (!core->eos)
         mc_async_queue_push(core->available_queue->input, inbuf);
     else
         ret = MC_INVALID_IN_BUF;
 
-
+    LOGI("@%p v(%d)e(%d)process_input(%d)", core, core->video, core->encoder, core->queued_count);
+    core->queued_count++;
 
     MEDIACODEC_FLEAVE();
 
@@ -1270,18 +1935,15 @@ mc_ret_e mc_gst_get_output(mc_handle_t *mc_handle, media_packet_h *outbuf, uint6
     if (!mc_handle)
         return MC_PARAM_ERROR;
 
-    core = (mc_gst_core_t*)mc_handle->core;
+    core = (mc_gst_core_t *)mc_handle->core;
     LOGI("@%p v(%d)e(%d) get_output", core, core->video, core->encoder);
 
     g_mutex_lock(&core->ports[1]->mutex);
 
-    if(!g_queue_is_empty(core->ports[1]->queue))
-    {
+    if (!g_queue_is_empty(core->ports[1]->queue)) {
         out_pkt = g_queue_pop_head(core->ports[1]->queue);
         LOGD("pop from output_queue : %p", out_pkt);
-    }
-    else
-    {
+    } else {
         ret = MC_OUTPUT_BUFFER_EMPTY;
         LOGD("output_queue is empty");
     }
@@ -1300,17 +1962,14 @@ mc_ret_e mc_gst_flush_buffers(mc_handle_t *mc_handle)
 
     int ret = MC_ERROR_NONE;
     mc_gst_core_t *core = NULL;
-    GstPad *pad;
-
-    pad = gst_element_get_static_pad(core->appsrc, "src");
 
     if (!mc_handle)
         return MC_PARAM_ERROR;
 
-    core = (mc_gst_core_t*)mc_handle->core;
+    core = (mc_gst_core_t *)mc_handle->core;
     LOGI("@%p v(%d)e(%d) get_output", core, core->video, core->encoder);
 
-    _mc_gst_flush_buffers ( core );
+    _mc_gst_flush_buffers(core);
 
     MEDIACODEC_FLEAVE();
 
@@ -1323,33 +1982,32 @@ static gboolean __mc_gst_init_gstreamer()
 
     static gboolean initialized = FALSE;
     static const int max_argc = 50;
-    gint* argc = NULL;
-    gchar** argv = NULL;
-    gchar** argv2 = NULL;
+    gint *argc = NULL;
+    gchar **argv = NULL;
+    gchar **argv2 = NULL;
     GError *err = NULL;
     int i = 0;
     int arg_count = 0;
 
-    if ( initialized )
-    {
+    if (initialized) {
         LOGD("gstreamer already initialized.\n");
         return TRUE;
     }
 
     /* alloc */
-    argc = malloc( sizeof(int) );
-    argv = malloc( sizeof(gchar*) * max_argc );
-    argv2 = malloc( sizeof(gchar*) * max_argc );
+    argc = malloc(sizeof(int));
+    argv = malloc(sizeof(gchar *) *max_argc);
+    argv2 = malloc(sizeof(gchar *) *max_argc);
 
-    if ( !argc || !argv || !argv2 )
+    if (!argc || !argv || !argv2)
         goto ERROR;
 
-    memset( argv, 0, sizeof(gchar*) * max_argc );
-    memset( argv2, 0, sizeof(gchar*) * max_argc );
+    memset(argv, 0, sizeof(gchar *) *max_argc);
+    memset(argv2, 0, sizeof(gchar *) *max_argc);
 
     /* add initial */
     *argc = 1;
-    argv[0] = g_strdup( "media codec" );
+    argv[0] = g_strdup("media codec");
 
     /* we would not do fork for scanning plugins */
     argv[*argc] = g_strdup("--gst-disable-registry-fork");
@@ -1367,77 +2025,69 @@ static gboolean __mc_gst_init_gstreamer()
     LOGD("argc : %d\n", *argc);
     arg_count = *argc;
 
-    for ( i = 0; i < arg_count; i++ )
-    {
+    for (i = 0; i < arg_count; i++) {
         argv2[i] = argv[i];
         LOGD("argv[%d] : %s\n", i, argv2[i]);
     }
 
     /* initializing gstreamer */
-    if ( ! gst_init_check (argc, &argv, &err))
-    {
+    if (!gst_init_check(argc, &argv, &err)) {
         LOGE("Could not initialize GStreamer: %s\n", err ? err->message : "unknown error occurred");
-        if (err)
-        {
-            g_error_free (err);
+        if (err) {
+            g_error_free(err);
         }
 
         goto ERROR;
     }
 
     /* release */
-    for ( i = 0; i < arg_count; i++ )
-    {
-        MC_FREEIF( argv2[i] );
+    for (i = 0; i < arg_count; i++) {
+        MC_FREEIF(argv2[i]);
     }
 
-    MC_FREEIF( argv );
-    MC_FREEIF( argv2 );
-    MC_FREEIF( argc );
+    MC_FREEIF(argv);
+    MC_FREEIF(argv2);
+    MC_FREEIF(argc);
 
     /* done */
     initialized = TRUE;
 
+    MEDIACODEC_FLEAVE();
     return TRUE;
 
 ERROR:
 
     /* release */
-    for ( i = 0; i < arg_count; i++ )
-    {
+    for (i = 0; i < arg_count; i++) {
         LOGD("free[%d] : %s\n", i, argv2[i]);
-        MC_FREEIF( argv2[i] );
+        MC_FREEIF(argv2[i]);
     }
 
-    MC_FREEIF( argv );
-    MC_FREEIF( argv2 );
-    MC_FREEIF( argc );
+    MC_FREEIF(argv);
+    MC_FREEIF(argv2);
+    MC_FREEIF(argc);
 
     return FALSE;
 }
 
-mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t* core, gchar *factory_name)
+mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t *core, gchar *factory_name)
 {
     GstBus *bus = NULL;
-    GstPad *pad = NULL;
 
     MEDIACODEC_FENTER();
 
     g_mutex_lock(&core->prepare_lock);
-    if(core->prepare_count == 0)
-    {
+    if (core->prepare_count == 0) {
 
-        if (!__mc_gst_init_gstreamer())
-        {
-            LOGE ("gstreamer initialize fail");
+        if (!__mc_gst_init_gstreamer()) {
+            LOGE("gstreamer initialize fail");
             g_mutex_unlock(&core->prepare_lock);
             return MC_NOT_INITIALIZED;
         }
         core->codec = gst_element_factory_make(factory_name, NULL);
 
-        if(!core->codec)
-        {
-            LOGE ("codec element create fail");
+        if (!core->codec) {
+            LOGE("codec element create fail");
             goto ERROR;
         }
 
@@ -1447,67 +2097,54 @@ mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t* core, gchar *factory_name)
         /* create common elements */
         core->pipeline = gst_pipeline_new(NULL);
 
-        if (!core->pipeline)
-        {
-            LOGE ("pipeline create fail");
+        if (!core->pipeline) {
+            LOGE("pipeline create fail");
             goto ERROR;
         }
 
         core->appsrc = gst_element_factory_make("appsrc", NULL);
 
-        if (!core->appsrc)
-        {
-            LOGE ("appsrc can't create");
+        if (!core->appsrc) {
+            LOGE("appsrc can't create");
             goto ERROR;
         }
 
         core->capsfilter = gst_element_factory_make("capsfilter", NULL);
 
-        if (!core->capsfilter)
-        {
-            LOGE ("capsfilter can't create");
+        if (!core->capsfilter) {
+            LOGE("capsfilter can't create");
             goto ERROR;
         }
 
         core->fakesink = gst_element_factory_make("fakesink", NULL);
 
-        if (!core->fakesink)
-        {
-            LOGE ("fakesink create fail");
+        if (!core->fakesink) {
+            LOGE("fakesink create fail");
             goto ERROR;
         }
-        g_object_set(core->fakesink, "enable-last-buffer", FALSE, NULL);
+        g_object_set(core->fakesink, "enable-last-sample", FALSE, NULL);
 
-        //__mc_link_elements(core);
+        /*__mc_link_elements(core);*/
         gst_bin_add_many(GST_BIN(core->pipeline), core->appsrc, core->capsfilter, core->codec, core->fakesink, NULL);
 
         /* link elements */
         gst_element_link_many(core->appsrc, core->capsfilter, core->codec, core->fakesink, NULL);
 
         /* connect signals, bus watcher */
-        bus = gst_pipeline_get_bus (GST_PIPELINE (core->pipeline));
-        core->bus_whatch_id = gst_bus_add_watch (bus, __mc_gst_bus_callback, core);
+        bus = gst_pipeline_get_bus(GST_PIPELINE(core->pipeline));
+        core->bus_whatch_id = gst_bus_add_watch(bus, __mc_gst_bus_callback, core);
         core->thread_default = g_main_context_get_thread_default();
 
         /* set sync handler to get tag synchronously */
         gst_bus_set_sync_handler(bus, __mc_gst_bus_sync_callback, core, NULL);
-
-        gst_object_unref (GST_OBJECT(bus));
-
-        /* add pad probe */
-        pad = gst_element_get_static_pad(core->fakesink, "sink");
-        //core->probe_id = gst_pad_add_event_probe(pad, G_CALLBACK(event_probe_cb), core);
-        core->probe_id =
-            gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
-            (GstPadProbeCallback)event_probe_cb, core, NULL);
-        gst_object_unref (pad);
+        gst_object_unref(GST_OBJECT(bus));
 
         /* app src */
         g_signal_connect(core->appsrc, "need-data", G_CALLBACK(__mc_gst_start_feed), core);
         g_signal_connect(core->appsrc, "enough-data", G_CALLBACK(__mc_gst_stop_feed), core);
 
         /* connect handoff */
-        g_object_set (GST_OBJECT(core->fakesink), "signal-handoffs", TRUE, NULL);
+        g_object_set(GST_OBJECT(core->fakesink), "signal-handoffs", TRUE, NULL);
         core->signal_handoff = g_signal_connect(core->fakesink, "handoff", G_CALLBACK(__mc_gst_buffer_add), core);
 
         /* set state PLAYING */
@@ -1524,19 +2161,19 @@ mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t* core, gchar *factory_name)
 STATE_CHANGE_FAILED:
 ERROR:
 
-    if(core->codec)
+    if (core->codec)
         gst_object_unref(GST_OBJECT(core->codec));
 
-    if(core->pipeline)
+    if (core->pipeline)
         gst_object_unref(GST_OBJECT(core->pipeline));
 
-    if(core->appsrc)
+    if (core->appsrc)
         gst_object_unref(GST_OBJECT(core->appsrc));
 
-    if(core->capsfilter)
+    if (core->capsfilter)
         gst_object_unref(GST_OBJECT(core->capsfilter));
 
-    if(core->fakesink)
+    if (core->fakesink)
         gst_object_unref(GST_OBJECT(core->fakesink));
 
     g_mutex_unlock(&core->prepare_lock);
@@ -1547,39 +2184,28 @@ ERROR:
 mc_ret_e _mc_gst_destroy_pipeline(mc_gst_core_t *core)
 {
     int ret = MC_ERROR_NONE;
-    GstPad *pad = NULL;
 
     MEDIACODEC_FENTER();
 
     g_mutex_lock(&core->prepare_lock);
     core->prepare_count--;
-    if(core->prepare_count == 0)
-    {
+    if (core->prepare_count == 0) {
 
-        if(core->pipeline)
-        {
+        if (core->pipeline) {
             /* disconnect signal */
-            if(core->fakesink && GST_IS_ELEMENT(core->fakesink))
-            {
-                if(g_signal_handler_is_connected(core->fakesink, core->signal_handoff))
-                {
+            if (core->fakesink && GST_IS_ELEMENT(core->fakesink)) {
+                if (g_signal_handler_is_connected(core->fakesink, core->signal_handoff)) {
                     g_signal_handler_disconnect(core->fakesink, core->signal_handoff);
                     LOGD("handoff signal destroy");
                 }
             }
 
-            if(core->bus_whatch_id)
-            {
+            if (core->bus_whatch_id) {
                 GSource *source = NULL;
-                source = g_main_context_find_source_by_id (core->thread_default, core->bus_whatch_id);
+                source = g_main_context_find_source_by_id(core->thread_default, core->bus_whatch_id);
                 g_source_destroy(source);
-                //g_source_remove(core->bus_whatch_id);
                 LOGD("bus_whatch_id destroy");
             }
-
-            pad = gst_element_get_static_pad(core->fakesink, "sink");
-            gst_pad_remove_probe(pad, core->probe_id);
-            g_object_unref(pad);
 
             MEDIACODEC_ELEMENT_SET_STATE(core->pipeline, GST_STATE_NULL);
 
@@ -1595,7 +2221,7 @@ mc_ret_e _mc_gst_destroy_pipeline(mc_gst_core_t *core)
     return ret;
 
 STATE_CHANGE_FAILED:
-    if(core->pipeline)
+    if (core->pipeline)
         gst_object_unref(GST_OBJECT(core->pipeline));
 
     LOGD("@%p v(%d)e(%d) destroy_pipeline failed", core, core->video, core->encoder);
@@ -1604,37 +2230,16 @@ STATE_CHANGE_FAILED:
     return MC_ERROR;
 }
 
-void __mc_gst_append_codec_data(mc_gst_core_t *core, media_packet_h pkt)
+void __mc_gst_buffer_add(GstElement *element, GstBuffer *buffer, GstPad *pad, gpointer data)
 {
-    void* buf_data = NULL;
-    uint64_t buf_size = 0;
-    void *tmp = NULL;
-
-    media_packet_get_buffer_size(pkt, &buf_size);
-    media_packet_get_buffer_data_ptr(pkt, &buf_data);
-
-    tmp = (unsigned char*)malloc(sizeof(unsigned char)*buf_size);
-    memcpy(tmp, buf_data, buf_size);
-    memcpy(buf_data, core->codec_data, core->codec_data_size);
-    memcpy(buf_data + core->codec_data_size, tmp, buf_size);
-    media_packet_set_buffer_size(pkt, buf_size+core->codec_data_size);
-    free(tmp);
-}
-
-void __mc_gst_buffer_add (GstElement *element, GstBuffer *buffer, GstPad *pad, gpointer data)
-{
-    mc_gst_core_t* core = (mc_gst_core_t*) data;
-    void* buf_data = NULL;
-    uint64_t buf_size = 0;
-    static gboolean initialized = FALSE;
-    int mask = 0xfffffff0;
     guint n;
     GstMemory *mem;
-    MMVideoBuffer *imgb = NULL;
     GstMapInfo map = GST_MAP_INFO_INIT;
     media_packet_h out_pkt = NULL;
 
     MEDIACODEC_FENTER();
+
+    mc_gst_core_t *core = (mc_gst_core_t *)data;
 
     gst_buffer_ref(buffer);
 
@@ -1643,7 +2248,7 @@ void __mc_gst_buffer_add (GstElement *element, GstBuffer *buffer, GstPad *pad, g
     mem = gst_buffer_peek_memory(buffer, n-1);
 
     gst_memory_map(mem, &map, GST_MAP_READ);
-    LOGD("n : %d, map.data : %p, map.size : %d",n, map.data, map.size);
+    LOGD("n : %d, map.data : %p, map.size : %d", n, map.data, map.size);
 
     out_pkt = __mc_gst_make_media_packet(core, map.data, map.size);
 
@@ -1651,7 +2256,7 @@ void __mc_gst_buffer_add (GstElement *element, GstBuffer *buffer, GstPad *pad, g
     gst_memory_unmap(mem, &map);
 
 
-    if ( out_pkt ) {
+    if (out_pkt) {
         media_packet_set_extra(out_pkt, buffer);
         media_packet_set_pts(out_pkt, GST_BUFFER_TIMESTAMP(buffer));
 
@@ -1660,7 +2265,7 @@ void __mc_gst_buffer_add (GstElement *element, GstBuffer *buffer, GstPad *pad, g
             core->need_codec_data = false;
         }
 
-        if ( core->need_sync_flag ) {
+        if (core->need_sync_flag) {
             media_packet_set_flags(out_pkt, MEDIA_PACKET_SYNC_FRAME);
             core->need_sync_flag = false;
         }
@@ -1669,12 +2274,13 @@ void __mc_gst_buffer_add (GstElement *element, GstBuffer *buffer, GstPad *pad, g
         /* push it to output buffer queue */
         g_queue_push_tail(core->ports[1]->queue, out_pkt);
 
-        count++;
-        LOGD("queued : %d", count);
+        core->dequeued_count++;
+        LOGD("dequeued : %d", core->dequeued_count);
+        LOGD("GST_BUFFER_TIMESTAMP = %"GST_TIME_FORMAT, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buffer)));
 
         g_mutex_unlock(&core->ports[1]->mutex);
 
-        if ( core->user_cb[_MEDIACODEC_EVENT_TYPE_FILLBUFFER] ) {
+        if (core->user_cb[_MEDIACODEC_EVENT_TYPE_FILLBUFFER]) {
             ((mc_fill_buffer_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_FILLBUFFER])
                 (out_pkt, core->user_data[_MEDIACODEC_EVENT_TYPE_FILLBUFFER]);
         }
@@ -1687,12 +2293,12 @@ void __mc_gst_buffer_add (GstElement *element, GstBuffer *buffer, GstPad *pad, g
 
 int __mc_output_buffer_finalize_cb(media_packet_h packet, int error_code, void *user_data)
 {
-    GstMemory *mem;
-    void* buffer = NULL;
+    void *buffer = NULL;
 
+    LOGD("packet finalized: %p", packet);
     media_packet_get_extra(packet, &buffer);
 
-    gst_buffer_unref((GstBuffer*)buffer);
+    gst_buffer_unref((GstBuffer *)buffer);
 
     return MEDIA_PACKET_FINALIZE;
 }
@@ -1705,10 +2311,10 @@ gchar *__mc_get_gst_input_format(media_packet_h packet, bool is_hw)
 
     media_packet_get_format(packet, &fmt);
     media_format_get_video_info(fmt, &mimetype, NULL, NULL, NULL, NULL);
+    media_format_unref(fmt);
     LOGD("input packet mimetype : %x", mimetype);
 
-    switch(mimetype)
-    {
+    switch (mimetype) {
         case MEDIA_FORMAT_I420:
             format = "I420";
             break;
@@ -1728,85 +2334,37 @@ gchar *__mc_get_gst_input_format(media_packet_h packet, bool is_hw)
     return format;
 }
 
-guint __mc_set_codecdata_buffer(mc_gst_core_t *core, GstCaps **caps, void *buf_data, int buf_size)
-{
-    GstBuffer *codec_data;
-    guint16 codec_data_data;
-    GstMapInfo map;
-    guint codecdata_size;
-
-    LOGD("[LEO] Enable codec_config, So Set caps for codec_data in codec_id (0x%x)", core->codec_id);
-
-    if ( (!core->encoder) &&
-            (core->codec_id == MEDIACODEC_AAC ||core->codec_id == MEDIACODEC_AAC_HE || core->codec_id == MEDIACODEC_AAC_HE_PS))
-    {
-        /*
-         * The codec_data data is according to AudioSpecificConfig,
-         *  ISO/IEC 14496-3, 1.6.2.1
-         */
-        codecdata_size = 16;          /*AUDIO_CODECDATA_SIZE = 16 (in testsuit)*/
-        codec_data = gst_buffer_new_and_alloc (codecdata_size);
-        gst_buffer_map (codec_data, &map, GST_MAP_WRITE);
-        memcpy (map.data, buf_data, codecdata_size);
-        gst_buffer_unmap (codec_data, &map);
-
-        gst_caps_set_simple (*caps, "codec_data", GST_TYPE_BUFFER, codec_data, NULL);
-    }
-    else
-    {
-        codecdata_size = 0;
-        LOGW("codec data set fail");
-    }
-
-    return codecdata_size;
-}
-
-GstMCBuffer* _mc_gst_media_packet_to_gstbuffer(mc_gst_core_t* core, GstCaps **caps, media_packet_h pkt, bool codec_config)
+GstMCBuffer *_mc_gst_media_packet_to_gstbuffer(mc_gst_core_t* core, GstCaps **caps, media_packet_h pkt, bool codec_config)
 {
     int ret = MEDIA_PACKET_ERROR_NONE;
-    GstMCBuffer* mc_buffer = NULL;
-    void* buf_data = NULL;
+    GstMCBuffer *mc_buffer = NULL;
+    void *buf_data = NULL;
     uint64_t buf_size = 0;
     uint64_t pts = 0;
     uint64_t dur = 0;
 
     ret = media_packet_get_buffer_size(pkt, &buf_size);
-    if (ret != MEDIA_PACKET_ERROR_NONE)
-    {
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
         LOGW("buffer size get fail");
         return NULL;
     }
 
     ret = media_packet_get_buffer_data_ptr(pkt, &buf_data);
-    if (ret != MEDIA_PACKET_ERROR_NONE)
-    {
+    if (ret != MEDIA_PACKET_ERROR_NONE) {
         LOGW("buffer size get fail");
         return NULL;
     }
 
     mc_buffer = gst_mediacodec_buffer_new(core, pkt, buf_size);
-    if(mc_buffer->buffer == NULL)
-    {
+    if (mc_buffer == NULL) {
         LOGW("failed to create inbuf");
         return NULL;
     }
 
-#if 1   //Added code for codec_data
-    if (codec_config)
-    {
-        guint codec_data_size = 0;
-        codec_data_size = __mc_set_codecdata_buffer(core, caps, buf_data, (int)buf_size);
+    LOGD("pkt : %p, buf_size : %d", pkt, (int)buf_size);
 
-        buf_data += codec_data_size;
-        buf_size -= codec_data_size;
-
-        LOGD("Enable codec_config, returned codec_data_size (%d)", codec_data_size);
-    }
-#endif
-
-    ret = __mc_fill_input_buffer(core, buf_data, (int)buf_size, mc_buffer);
-    if (ret != MC_ERROR_NONE)
-    {
+    ret = __mc_fill_input_buffer(core, pkt, mc_buffer);
+    if (ret != MC_ERROR_NONE) {
         LOGW("failed to fill inbuf");
         return NULL;
     }
@@ -1822,96 +2380,69 @@ GstMCBuffer* _mc_gst_media_packet_to_gstbuffer(mc_gst_core_t* core, GstCaps **ca
     return mc_buffer;
 }
 
-media_packet_h __mc_gst_gstbuffer_to_media_packet(mc_gst_core_t* core, GstBuffer* buff)
-{
-    media_packet_h out_pkt = NULL;
-
-    if (!buff)
-        return NULL;
-
-    //__mc_fill_output_buffer(core, buff, &out_pkt);
-
-    gst_buffer_ref(buff);
-
-    return out_pkt;
-}
-
 media_packet_h __mc_gst_make_media_packet(mc_gst_core_t *core, unsigned char *data, int size)
 {
     media_packet_h pkt = NULL;
 
     __mc_fill_output_buffer(core, data, size,  &pkt);
 
+
     return pkt;
 }
 
-gboolean __mc_gst_bus_callback (GstBus *bus, GstMessage *msg, gpointer data)
+gboolean __mc_gst_bus_callback(GstBus *bus, GstMessage *msg, gpointer data)
 {
     int ret  = MC_ERROR_NONE;
-    mc_gst_core_t *core = (mc_gst_core_t*)data;
+    mc_gst_core_t *core = (mc_gst_core_t *)data;
     LOGD("@%p v(%d)e(%d)", core, core->video, core->encoder);
 
-    switch (GST_MESSAGE_TYPE (msg)) {
+    switch (GST_MESSAGE_TYPE(msg)) {
 
         case GST_MESSAGE_EOS:
         {
-            core->eos = true;
-            g_cond_signal(&core->eos_cond);
-            LOGD("send eos signal");
-            if (core->user_cb[_MEDIACODEC_EVENT_TYPE_EOS])
-            {
+            _mc_send_eos_signal(core);
+
+            if (core->user_cb[_MEDIACODEC_EVENT_TYPE_EOS]) {
                 LOGD("eos callback invoked");
                 ((mc_eos_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_EOS])(core->user_data[_MEDIACODEC_EVENT_TYPE_EOS]);
             }
 
-            LOGD ("End of stream\n");
+            LOGD("End of stream\n");
         }
         break;
 
         case GST_MESSAGE_ERROR:
         {
-            GError* error = NULL;
+            GError *error = NULL;
 
-            gst_message_parse_error (msg, &error, NULL);
+            gst_message_parse_error(msg, &error, NULL);
 
-            if (!error)
-            {
+            if (!error) {
                 LOGW("GST error message parsing failed");
                 break;
             }
 
-            LOGW ("Error: %s\n", error->message);
+            LOGW("Error: %s\n", error->message);
 
-            if(error)
-            {
-                if(error->domain == GST_STREAM_ERROR)
-                {
+            if (error) {
+                if (error->domain == GST_STREAM_ERROR) {
                     ret = __gst_handle_stream_error(core, error, msg);
-                }
-                else if (error->domain == GST_RESOURCE_ERROR)
-                {
+                } else if (error->domain == GST_RESOURCE_ERROR) {
                     ret = __gst_handle_resource_error(core, error->code);
-                }
-                else if (error->domain == GST_LIBRARY_ERROR)
-                {
+                } else if (error->domain == GST_LIBRARY_ERROR) {
                     ret = __gst_handle_library_error(core, error->code);
-                }
-                else if (error->domain == GST_CORE_ERROR)
-                {
+                } else if (error->domain == GST_CORE_ERROR) {
                     ret = __gst_handle_core_error(core, error->code);
-                }
-                else
-                {
+                } else {
                     LOGW("Unexpected error has occured");
                 }
 
-                if (core->user_cb[_MEDIACODEC_EVENT_TYPE_ERROR])
-                {
+                if (core->user_cb[_MEDIACODEC_EVENT_TYPE_ERROR]) {
                     ((mc_error_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_ERROR])
                         (ret, core->user_data[_MEDIACODEC_EVENT_TYPE_ERROR]);
                 }
             }
-            g_error_free (error);
+            g_error_free(error);
         }
         break;
 
@@ -1919,24 +2450,19 @@ gboolean __mc_gst_bus_callback (GstBus *bus, GstMessage *msg, gpointer data)
         break;
     }
 
-    //gst_object_unref(msg);
-
     return TRUE;
 }
 
-static gboolean
-__mc_gst_check_useful_message(mc_gst_core_t *core, GstMessage *msg)
+static gboolean __mc_gst_check_useful_message(mc_gst_core_t *core, GstMessage *msg)
 {
     gboolean retval = false;
 
-    if(!core->pipeline)
-    {
+    if (!core->pipeline) {
         LOGE("mediacodec pipeline handle is null");
         return true;
     }
 
-    switch (GST_MESSAGE_TYPE (msg))
-    {
+    switch (GST_MESSAGE_TYPE(msg)) {
         case GST_MESSAGE_TAG:
         case GST_MESSAGE_EOS:
         case GST_MESSAGE_ERROR:
@@ -1951,28 +2477,24 @@ __mc_gst_check_useful_message(mc_gst_core_t *core, GstMessage *msg)
     return retval;
 }
 
-static GstBusSyncReply
-__mc_gst_bus_sync_callback(GstBus *bus, GstMessage *msg, gpointer data)
+static GstBusSyncReply __mc_gst_bus_sync_callback(GstBus *bus, GstMessage *msg, gpointer data)
 {
-    mc_gst_core_t *core = (mc_gst_core_t*)data;
+    mc_gst_core_t *core = (mc_gst_core_t *)data;
     GstBusSyncReply reply = GST_BUS_DROP;
 
     LOGD("__mc_gst_bus_sync_callback is called");
 
-    if(!core->pipeline)
-    {
+    if (!core->pipeline) {
         LOGE("mediacodec pipeline handle is null");
         return GST_BUS_PASS;
     }
 
-    if(!__mc_gst_check_useful_message(core, msg))
-    {
+    if (!__mc_gst_check_useful_message(core, msg)) {
         gst_message_unref(msg);
         return GST_BUS_DROP;
     }
 
-    switch (GST_MESSAGE_TYPE (msg))
-    {
+    switch (GST_MESSAGE_TYPE(msg)) {
         case GST_MESSAGE_EOS:
         case GST_MESSAGE_ERROR:
           __mc_gst_bus_callback(NULL, msg, core);
@@ -1984,100 +2506,73 @@ __mc_gst_bus_sync_callback(GstBus *bus, GstMessage *msg, gpointer data)
           break;
     }
 
-    if( reply == GST_BUS_DROP )
+    if (reply == GST_BUS_DROP)
         gst_message_unref(msg);
 
     return reply;
 }
 
-static MMVideoBuffer * __mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet_h pkt)
+static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet_h pkt)
 {
     tbm_surface_h surface = NULL;
     tbm_bo bo = NULL;
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t*)core->codec_info;
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
 
     if (!pkt) {
         LOGE("output is null");
         return NULL;
     }
 
-    MMVideoBuffer *imgb = NULL;
-    imgb = (MMVideoBuffer *)malloc(sizeof(MMVideoBuffer));
-    if (!imgb) {
+    MMVideoBuffer *mm_vbuffer = NULL;
+    mm_vbuffer = (MMVideoBuffer *)malloc(sizeof(MMVideoBuffer));
+    if (!mm_vbuffer) {
         LOGE("Failed to alloc MMVideoBuffer");
         return NULL;
     }
-    memset(imgb, 0x00, sizeof(MMVideoBuffer));
+    memset(mm_vbuffer, 0x00, sizeof(MMVideoBuffer));
 
     media_packet_get_tbm_surface(pkt, &surface);
     bo = tbm_surface_internal_get_bo(surface, 0);
 
     tbm_bo_handle handle = tbm_bo_get_handle(bo, TBM_DEVICE_CPU);
-#ifdef Z130H
+#ifdef TIZEN_PROFILE_LITE
     int phy_addr = 0;
     int phy_size = 0;
     tbm_bo_handle handle_fd = tbm_bo_get_handle(bo, TBM_DEVICE_MM);
 
-    if (__tbm_get_physical_addr_bo(handle_fd, &phy_addr, &phy_size) == 0)
-    {
-        imgb->handle.paddr[0] = (void*)phy_addr;
-        LOGD("imgb->paddr : %p", imgb->handle.paddr[0]);
+    if (__tbm_get_physical_addr_bo(handle_fd, &phy_addr, &phy_size) == 0) {
+        mm_vbuffer->handle.paddr[0] = (void *)phy_addr;
+        LOGD("mm_vbuffer->paddr : %p", mm_vbuffer->handle.paddr[0]);
     }
     LOGD("paddr : %p", phy_addr);
 #endif
 
-    imgb->type = MM_VIDEO_BUFFER_TYPE_TBM_BO;
-    imgb->handle.bo[0] = bo;
-    imgb->data[0] =  handle.ptr;
-    imgb->width[0] = enc_info->width;
-    imgb->height[0] = enc_info->height;
-    imgb->stride_width[0] = imgb->width[0];
-    imgb->stride_height[0] = imgb->height[0];
+    mm_vbuffer->type = MM_VIDEO_BUFFER_TYPE_TBM_BO;
+    mm_vbuffer->handle.bo[0] = bo;
+    mm_vbuffer->data[0] =  handle.ptr;
+    mm_vbuffer->width[0] = enc_info->width;
+    mm_vbuffer->height[0] = enc_info->height;
+    mm_vbuffer->stride_width[0] = mm_vbuffer->width[0];
+    mm_vbuffer->stride_height[0] = mm_vbuffer->height[0];
 
-    return imgb;
+    return mm_vbuffer;
 }
 
 static void gst_mediacodec_buffer_finalize(GstMCBuffer *mc_buffer)
 {
-    MMVideoBuffer *imgb = NULL;
-    GstMemory *mem = NULL;
-    GstMapInfo map = GST_MAP_INFO_INIT;
-    mc_gst_core_t *core = mc_buffer->core;
-    guint n;
+    if (!mc_buffer)
+        return;
 
+    mc_gst_core_t *core = (mc_gst_core_t *)mc_buffer->core;
 
-
-    n = gst_buffer_n_memory(mc_buffer->buffer);
-
-    mem = gst_buffer_peek_memory(mc_buffer->buffer, n-1);
-
-    gst_memory_map(mem, &map, GST_MAP_READ);
-    LOGD("n : %d, map.data : %p, map.size : %d",n, map.data, map.size);
-
-    gst_memory_unmap(mem, &map);
-
-    LOGD("gst_mediacodec_buffer_finalize()");
-/*
-    if(mc_buffer->has_imgb) {
-
-        mem = gst_buffer_peek_memory(mc_buffer->buffer, 1);
-        gst_memory_map(mem, &map, GST_MAP_READ);
-        imgb = (MMVideoBuffer*)map.data;
-        gst_memory_unmap(mem, &map);
-
-        if(imgb) {
-            free(imgb);
-            imgb = NULL;
-            LOGD("imgb is destroyed");
-        }
-    }
-*/
-
-    if (core->user_cb[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER])
-    {
+    if (core->user_cb[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER]) {
         ((mc_empty_buffer_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER])
                 (mc_buffer->pkt, core->user_data[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER]);
     }
+
+    LOGD("%p buffer finalized...", mc_buffer);
+    free(mc_buffer);
+    mc_buffer = NULL;
 
     return;
 }
@@ -2087,8 +2582,14 @@ static GstMCBuffer *gst_mediacodec_buffer_new(mc_gst_core_t* core, media_packet_
     GstMCBuffer *mc_buffer = NULL;
 
     mc_buffer = (GstMCBuffer *)malloc(sizeof(*mc_buffer));
+
+    if (mc_buffer == NULL) {
+        LOGE("malloc fail");
+        return NULL;
+    }
+
     mc_buffer->buffer = gst_buffer_new();
-    mc_buffer->buf_size = size;
+    mc_buffer->buf_size = 0;
 
     LOGD("creating buffer : %p, %p", mc_buffer, mc_buffer->buffer);
     mc_buffer->core = core;
@@ -2097,14 +2598,13 @@ static GstMCBuffer *gst_mediacodec_buffer_new(mc_gst_core_t* core, media_packet_
     return mc_buffer;
 }
 
-static gint __gst_handle_core_error(mc_gst_core_t* core, int code )
+static gint __gst_handle_core_error(mc_gst_core_t *core, int code)
 {
     gint trans_err = MEDIACODEC_ERROR_NONE;
 
     g_return_val_if_fail(core, MC_PARAM_ERROR);
 
-    switch ( code )
-    {
+    switch (code) {
         case GST_CORE_ERROR_MISSING_PLUGIN:
             return MEDIACODEC_ERROR_NOT_SUPPORTED_FORMAT;
         case GST_CORE_ERROR_STATE_CHANGE:
@@ -2128,14 +2628,13 @@ static gint __gst_handle_core_error(mc_gst_core_t* core, int code )
     return trans_err;
 }
 
-static gint __gst_handle_library_error(mc_gst_core_t* core, int code)
+static gint __gst_handle_library_error(mc_gst_core_t *core, int code)
 {
     gint trans_err = MEDIACODEC_ERROR_NONE;
 
     g_return_val_if_fail(core, MC_PARAM_ERROR);
 
-    switch ( code )
-    {
+    switch (code) {
         case GST_LIBRARY_ERROR_FAILED:
         case GST_LIBRARY_ERROR_TOO_LAZY:
         case GST_LIBRARY_ERROR_INIT:
@@ -2151,14 +2650,13 @@ static gint __gst_handle_library_error(mc_gst_core_t* core, int code)
 }
 
 
-static gint __gst_handle_resource_error(mc_gst_core_t* core, int code )
+static gint __gst_handle_resource_error(mc_gst_core_t *core, int code)
 {
     gint trans_err = MEDIACODEC_ERROR_NONE;
 
     g_return_val_if_fail(core, MC_PARAM_ERROR);
 
-    switch ( code )
-    {
+    switch (code) {
         case GST_RESOURCE_ERROR_NO_SPACE_LEFT:
             trans_err = MEDIACODEC_ERROR_NO_FREE_SPACE;
             break;
@@ -2180,16 +2678,15 @@ static gint __gst_handle_resource_error(mc_gst_core_t* core, int code )
     return trans_err;
 }
 
-static gint __gst_handle_stream_error(mc_gst_core_t* core, GError* error, GstMessage * message)
+static gint __gst_handle_stream_error(mc_gst_core_t *core, GError* error, GstMessage * message)
 {
     gint trans_err = MEDIACODEC_ERROR_NONE;
 
     g_return_val_if_fail(core, MC_PARAM_ERROR);
     g_return_val_if_fail(error, MC_PARAM_ERROR);
-    g_return_val_if_fail (message, MC_PARAM_ERROR);
+    g_return_val_if_fail(message, MC_PARAM_ERROR);
 
-    switch ( error->code )
-    {
+    switch (error->code) {
         case GST_STREAM_ERROR_FAILED:
         case GST_STREAM_ERROR_TYPE_NOT_FOUND:
         case GST_STREAM_ERROR_DECODE:
@@ -2197,7 +2694,7 @@ static gint __gst_handle_stream_error(mc_gst_core_t* core, GError* error, GstMes
         case GST_STREAM_ERROR_DECRYPT:
         case GST_STREAM_ERROR_DECRYPT_NOKEY:
         case GST_STREAM_ERROR_CODEC_NOT_FOUND:
-            trans_err = __gst_transform_gsterror( core, message, error );
+            trans_err = __gst_transform_gsterror(core, message, error);
             break;
 
         case GST_STREAM_ERROR_NOT_IMPLEMENTED:
@@ -2214,35 +2711,34 @@ static gint __gst_handle_stream_error(mc_gst_core_t* core, GError* error, GstMes
     return trans_err;
 }
 
-static gint __gst_transform_gsterror( mc_gst_core_t *core, GstMessage * message, GError* error )
+static gint __gst_transform_gsterror(mc_gst_core_t *core, GstMessage * message, GError* error)
 {
     gchar *src_element_name = NULL;
     GstElement *src_element = NULL;
     GstElementFactory *factory = NULL;
-    const gchar* klass = NULL;
+    const gchar *klass = NULL;
 
 
     src_element = GST_ELEMENT_CAST(message->src);
-    if ( !src_element )
+    if (!src_element)
         goto INTERNAL_ERROR;
 
     src_element_name = GST_ELEMENT_NAME(src_element);
-    if ( !src_element_name )
+    if (!src_element_name)
         goto INTERNAL_ERROR;
 
     factory = gst_element_get_factory(src_element);
-    if ( !factory )
+    if (!factory)
         goto INTERNAL_ERROR;
 
     klass = gst_element_factory_get_klass(factory);
-    if ( !klass )
+    if (!klass)
         goto INTERNAL_ERROR;
 
     LOGD("error code=%d, msg=%s, src element=%s, class=%s\n",
             error->code, error->message, src_element_name, klass);
 
-    switch ( error->code )
-    {
+    switch (error->code) {
         case GST_STREAM_ERROR_DECODE:
             return MEDIACODEC_ERROR_INVALID_STREAM;
             break;
@@ -2267,21 +2763,22 @@ INTERNAL_ERROR:
     return MEDIACODEC_ERROR_INTERNAL;
 }
 
-static void _mc_gst_flush_buffers( mc_gst_core_t *core )
+static void _mc_gst_flush_buffers(mc_gst_core_t *core)
 {
-    GstPad *pad;
+    int ret = MC_ERROR_NONE;
 
-    pad = gst_element_get_static_pad(core->appsrc, "src");
+    MEDIACODEC_FENTER();
+    _mc_gst_set_flush_input(core);
+    ret = gst_pad_push_event(core->pipeline, gst_event_new_flush_start());
+    if (ret != MC_ERROR_NONE) {
+        LOGE("failed to send flush_start event");
+    }
 
-    mc_async_queue_disable(core->available_queue->input);
+    ret = gst_pad_push_event(core->pipeline, gst_event_new_flush_stop(TRUE));
+    if (ret != MC_ERROR_NONE) {
+        LOGE("failed to send flush_stop event");
+    }
 
-    _mc_gst_set_flush_input ( core );
-    gst_pad_push_event( pad, gst_event_new_flush_start());
-    _mc_gst_set_flush_output ( core );
-    gst_pad_push_event ( pad, gst_event_new_flush_stop (FALSE));
-    gst_object_unref(pad);
-
-    mc_async_queue_enable(core->available_queue->input);
 
     MEDIACODEC_FLEAVE();
 }
@@ -2292,44 +2789,46 @@ static void _mc_gst_set_flush_input(mc_gst_core_t *core)
     media_packet_h pkt = NULL;
 
     LOGI("_mc_gst_set_flush_input is called");
-    while( pkt != mc_async_queue_pop_forced(core->available_queue->input) )
-    {
+    while (pkt != mc_async_queue_pop_forced(core->available_queue->input)) {
         LOGD("%p pkt is poped");
-        if (core->user_cb[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER])
-        {
+        if (core->user_cb[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER]) {
             ((mc_empty_buffer_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER])
                 (pkt, core->user_data[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER]);
         }
     }
 
     mc_async_queue_flush(core->available_queue->input);
+    core->queued_count = 0;
 }
 
 static void _mc_gst_set_flush_output(mc_gst_core_t *core)
 {
     media_packet_h pkt = NULL;
 
-    LOGI("_mc_gst_set_flush_output is called");
+    MEDIACODEC_FENTER();
     g_mutex_lock(&core->ports[1]->mutex);
 
-    if(!g_queue_is_empty(core->ports[1]->queue))
+    while(!g_queue_is_empty(core->ports[1]->queue))
     {
-        while(pkt != g_queue_pop_head(core->ports[1]->queue))
-        {
-            LOGD("outpkt in output_queue : %p", pkt);
+        pkt = g_queue_pop_head(core->ports[1]->queue);
+        LOGD("outpkt in output_queue : %p", pkt);
+        if (pkt) {
             media_packet_destroy(pkt);
+            LOGD("outpkt destroyed");
+            pkt = NULL;
         }
     }
-
+    core->dequeued_count = 0;
     g_mutex_unlock(&core->ports[1]->mutex);
+    MEDIACODEC_FLEAVE();
 }
 
-#ifdef Z130H
-int __tbm_get_physical_addr_bo(tbm_bo_handle tbm_bo_handle_fd_t, int* phy_addr, int* phy_size)
+#ifdef TIZEN_PROFILE_LITE
+int __tbm_get_physical_addr_bo(tbm_bo_handle tbm_bo_handle_fd_t, int *phy_addr, int *phy_size)
 {
     int tbm_bo_handle_fd;
 
-    int ret=0;
+    int ret = 0;
 
     tbm_bo_handle_fd = tbm_bo_handle_fd_t.u32;
 
@@ -2343,33 +2842,27 @@ int __tbm_get_physical_addr_bo(tbm_bo_handle tbm_bo_handle_fd_t, int* phy_addr, 
     custom_data.cmd = 4;
     custom_data.arg = (unsigned long)&mmu_data;
 
-    ion_fd = open ("/dev/ion", open_flags);
-    if (ion_fd < 0)
-    {
-      LOGE ("[tbm_get_physical_addr_bo] ion_fd open device failed");
+    ion_fd = open("/dev/ion", open_flags);
+    if (ion_fd < 0) {
+      LOGE("[tbm_get_physical_addr_bo] ion_fd open device failed");
     }
 
-    if (ioctl(ion_fd, ION_IOC_CUSTOM, &custom_data)<0)
-    {
-        LOGE ("[tbm_get_physical_addr_bo] ION_IOC_CUSTOM fails %d %s",errno,strerror(errno));
-        ret=-1;
+    if (ioctl(ion_fd, ION_IOC_CUSTOM, &custom_data) < 0) {
+        LOGE("[tbm_get_physical_addr_bo] ION_IOC_CUSTOM failed");
+        ret = -1;
     }
 
-    if (!ret)
-    {
+    if (!ret) {
         *phy_addr = mmu_data.iova_addr;
         *phy_size = mmu_data.iova_size;
-    }
-    else
-    {
+    } else {
         *phy_addr = 0;
         *phy_size = 0;
-        LOGW ("[tbm_get_physical_addr_bo] getting physical address is failed. phy_addr = 0");
+        LOGW("[tbm_get_physical_addr_bo] getting physical address is failed. phy_addr = 0");
     }
 
-    if (ion_fd != -1)
-    {
-        close (ion_fd);
+    if (ion_fd != -1) {
+        close(ion_fd);
         ion_fd = -1;
     }
 
@@ -2403,16 +2896,16 @@ static int __tile_4x2_read(int x_size, int y_size, int x_pos, int y_pos)
     int x_addr;
     int trans_addr;
 
-    pixel_x_m1 = x_size -1;
-    pixel_y_m1 = y_size -1;
+    pixel_x_m1 = x_size - 1;
+    pixel_y_m1 = y_size - 1;
 
     roundup_x = ((pixel_x_m1 >> 7) + 1);
 
     x_addr = x_pos >> 2;
 
-    if ((y_size <= y_pos+32) && ( y_pos < y_size) &&
+    if ((y_size <= y_pos+32) && (y_pos < y_size) &&
         (((pixel_y_m1 >> 5) & 0x1) == 0) && (((y_pos >> 5) & 0x1) == 0)) {
-        linear_addr0 = (((y_pos & 0x1f) <<4) | (x_addr & 0xf));
+        linear_addr0 = (((y_pos & 0x1f) << 4) | (x_addr & 0xf));
         linear_addr1 = (((y_pos >> 6) & 0xff) * roundup_x + ((x_addr >> 6) & 0x3f));
 
         if (((x_addr >> 5) & 0x1) == ((y_pos >> 5) & 0x1))
@@ -2430,7 +2923,7 @@ static int __tile_4x2_read(int x_size, int y_size, int x_pos, int y_pos)
     }
 
     linear_addr0 = linear_addr0 << 2;
-    trans_addr = (linear_addr1 <<13) | (bank_addr << 11) | linear_addr0;
+    trans_addr = (linear_addr1 << 13) | (bank_addr << 11) | linear_addr0;
 
     return trans_addr;
 }
@@ -2479,7 +2972,7 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest, unsigned char
     temp1 = temp3-left;
     /* real width is greater than or equal 256 */
     if (temp1 >= 256) {
-        for (i=top; i<yuv420_height-buttom; i=i+1) {
+        for (i = top; i < yuv420_height-buttom; i += 1) {
             j = left;
             temp3 = (j>>8)<<8;
             temp3 = temp3>>6;
@@ -2498,7 +2991,7 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest, unsigned char
                 temp4 = 8;
             } else {
                 temp2 = ((yuv420_height+31)>>5)<<5;
-                if ((i+32)<temp2) {
+                if ((i + 32) < temp2) {
                     /* even1 fomula: x+((x+2)>>2)<<2+x_block_num*y */
                     temp1 = temp3+2;
                     temp1 = (temp1>>2)<<2;
@@ -2506,7 +2999,7 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest, unsigned char
                     temp1 = ((yuv420_width+127)>>7)<<7;
                     tiled_offset = tiled_offset+temp4*(temp1>>6);
                     tiled_offset = tiled_offset<<11;
-                    tiled_offset1 = tiled_offset+2048*6;
+                    tiled_offset1 = tiled_offset + 2048 * 6;
                     temp4 = 8;
                 } else {
                     /* even2 fomula: x+x_block_num*y */
@@ -2556,7 +3049,7 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest, unsigned char
             j = (left>>8)<<8;
             j = j + 256;
             temp2 = yuv420_width-right-256;
-            for (; j<=temp2; j=j+256) {
+            for (; j <= temp2; j += 256) {
                 memcpy(yuv420_dest+linear_offset, nv12t_src+tiled_offset, 64);
                 tiled_offset1 = tiled_offset1+temp4*2048;
                 memcpy(yuv420_dest+linear_offset+64, nv12t_src+tiled_offset+2048, 64);
@@ -2585,7 +3078,7 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest, unsigned char
             }
         }
     } else if (temp1 >= 64) {
-        for (i=top; i<(yuv420_height-buttom); i=i+1) {
+        for (i = top; i < (yuv420_height-buttom); i += 1) {
             j = left;
             tiled_offset = __tile_4x2_read(yuv420_width, yuv420_height, j, i);
             temp2 = ((j+64)>>6)<<6;
@@ -2615,9 +3108,9 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest, unsigned char
             }
         }
     } else {
-        for (i=top; i<(yuv420_height-buttom); i=i+1) {
+        for (i = top; i < (yuv420_height-buttom); i += 1) {
             linear_offset = temp1*(i-top);
-            for (j=left; j<(yuv420_width-right); j=j+2) {
+            for (j = left; j < (yuv420_width - right); j += 2) {
                 tiled_offset = __tile_4x2_read(yuv420_width, yuv420_height, j, i);
                 temp4 = j&0x3;
                 tiled_offset = tiled_offset+temp4;
@@ -2628,80 +3121,23 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest, unsigned char
     }
 }
 
-int _mc_check_out_bytestream (mc_gst_core_t *core, unsigned char *nal, int byte_length)
+void _mc_send_eos_signal(mc_gst_core_t *core)
 {
-    int ret = MC_ERROR_NONE;
-    int stacked_length = 0;
-    int nal_length = 0;
-    unsigned int syntax = 0;
-    int idr = 0;
-    int nal_unit_type = 0;
-    unsigned char tmp[1000000];
-    unsigned char sps[100];
-    unsigned char pps[100];
+    g_mutex_lock(&core->eos_mutex);
+    core->eos = FALSE;
+    g_cond_broadcast(&core->eos_cond);
+    g_mutex_unlock(&core->eos_mutex);
+    LOGD("send EOS signal");
+}
 
-    mc_bitstream_t pstream;
-
-    nal_unit_type = nal[2] == 1 ? (nal[3] & 0x1F) : (nal[4] & 0x1F);
-
-    if ( nal_unit_type == 0x7 || nal_unit_type == 0x8 || nal_unit_type == 0x9 )
-    {
-        while (1)
-        {
-            nal_length = __mc_bytestream_to_nal( nal + stacked_length, byte_length - stacked_length, tmp);
-
-            mc_init_bits (&pstream, nal + stacked_length, byte_length - stacked_length );
-            mc_read_bits (&pstream, 32, &syntax);
-            mc_read_bits (&pstream, 8, &syntax);
-
-            LOGD("stacked_length : %d, byte_length : %d, nal_length : %d",
-                stacked_length, byte_length, nal_length);
-
-            switch ( syntax & 0x1F )
-            {
-                case NAL_SEQUENCE_PARAMETER_SET:
-                    LOGD("SPS is found : ", nal_length);
-                    core->sps_size = nal_length;
-                    memcpy(sps, tmp, nal_length);
-                    break;
-                case NAL_PICTURE_PARAMETER_SET:
-                    LOGD("PPS is found : %d", nal_length);
-                    core->pps_size = nal_length;
-                    memcpy(pps, tmp, nal_length);
-                    break;
-                case NAL_SLICE_IDR:
-                    LOGD ("IDR is found");
-                    idr++;
-                    core->idr_count++;
-                    break;
-                default:
-                    LOGD ("%x nal_unit_type is detected");
-                    break;
-            }
-
-            stacked_length += nal_length;
-
-            if ( stacked_length >= byte_length )
-                break;
-        }
-        if( core->sps_size > 0 && core->pps_size > 0 ) {
-            memcpy (core->codec_data, sps, core->sps_size);
-            memcpy (core->codec_data+core->sps_size, pps, core->pps_size);
-            core->codec_data_size = core->sps_size + core->pps_size;
-        }
-
+void _mc_wait_for_eos(mc_gst_core_t *core)
+{
+    g_mutex_lock(&core->eos_mutex);
+    core->eos = TRUE;
+    LOGD("waiting for EOS");
+    while (core->eos) {
+        g_cond_wait(&core->eos_cond, &core->eos_mutex);
     }
-    else if ( nal_unit_type == 0x5 )
-    {
-        if ( !core->idr_count )
-            core->need_codec_data = true;
-        core->idr_count++;
-        LOGD("IDR : %d", core->idr_count);
-    }
-    else
-    {
-        LOGD("nal_unit_type : %x", nal_unit_type);
-    }
-
-    return ret;
+    LOGD("received EOS");
+    g_mutex_unlock(&core->eos_mutex);
 }
