@@ -140,6 +140,9 @@ int mc_set_codec(MMHandleType mediacodec, mediacodec_codec_type_e codec_id, medi
         return MC_PARAM_ERROR;
     }
 
+    /* if user doesn't set codec-type, s/w codec would be set */
+    if (!GET_IS_HW(flags) && !GET_IS_SW(flags))
+        flags |= MEDIACODEC_SUPPORT_TYPE_SW;
 
     for (i = 0; i < mc_handle->num_supported_codecs; i++) {
         if ((codec_id == spec_emul[i].codec_id) && (flags == spec_emul[i].codec_type)) {
