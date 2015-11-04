@@ -102,9 +102,6 @@ typedef struct _mc_decoder_info_t mc_decoder_info_t;
 typedef struct _mc_encoder_info_t mc_encoder_info_t;
 typedef struct _mc_handle_t mc_handle_t;
 
-#define MEDIACODEC_CMD_LOCK(x_mediacodec) g_mutex_lock(&((mc_handle_t*)x_mediacodec)->cmd_lock )
-#define MEDIACODEC_CMD_UNLOCK(x_mediacodec) g_mutex_unlock( &((mc_handle_t*)x_mediacodec)->cmd_lock )
-
 typedef void (*mc_dequeue_input_buffer_cb)(media_packet_h pkt, void *user_data);
 typedef void (*mc_empty_buffer_cb)(media_packet_h pkt, void *user_data);
 typedef void (*mc_fill_buffer_cb)(media_packet_h pkt, void *user_data);
@@ -190,7 +187,6 @@ struct _mc_handle_t
     bool is_prepared;
 
     GList *supported_codecs;
-    GMutex cmd_lock;
     mediacodec_port_type_e port_type;
     mediacodec_codec_type_e codec_id;
     mc_vendor_e vendor;

@@ -29,7 +29,7 @@
 
 #define PACKAGE "media_codec_test"
 #define MAX_HANDLE		        4
-//#define DUMP_OUTBUF           1
+#define DUMP_OUTBUF           1
 #define TEST_FILE_SIZE	      (10 * 1024 * 1024)
 #define MAX_STRING_LEN	      256
 
@@ -688,6 +688,7 @@ int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
     media_format_mimetype_e mime;
     encoder = GET_IS_ENCODER(flag) ? 1 : 0;
     *hardware = GET_IS_HW(flag) ? 1 : 0;
+    g_print("!!!!!!!!!!!!!!!!! hardware : %d\n\n\n", *hardware);
 
     switch (codecid) {
         case MEDIACODEC_H264:
@@ -817,7 +818,8 @@ static gboolean read_data(App *app)
             media_packet_get_video_stride_width(pkt, 0, &stride_width);
             media_packet_get_video_stride_height(pkt, 0, &stride_height);
 
-            offset = stride_width*stride_height;
+            offset = app->width*app->height;
+            g_print("y stride_width : %d, stride_height : %d, offset : %d\n",stride_width, stride_height, offset);
 
             memcpy(buf_data_ptr, tmp, offset);
 
@@ -825,8 +827,9 @@ static gboolean read_data(App *app)
             media_packet_get_video_plane_data_ptr(pkt, 1, &buf_data_ptr);
             media_packet_get_video_stride_width(pkt, 1, &stride_width);
             media_packet_get_video_stride_height(pkt, 1, &stride_height);
-            memcpy(buf_data_ptr, tmp + offset, stride_width*stride_height);
+            memcpy(buf_data_ptr, tmp + offset, (app->width*app->height)/2);
 
+            g_print("uv stride_width : %d, stride_height : %d, offset : %d\n",stride_width, stride_height, offset);
             if (app->hardware == FALSE) {
                 /* V */
                 media_packet_get_video_plane_data_ptr(pkt, 2, &buf_data_ptr);
@@ -900,7 +903,7 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
     uint64_t buf_size;
     int stride_width, stride_height;
 
-    media_packet_get_buffer_data_ptr(out_pkt, 0, &data);
+    media_packet_get_buffer_data_ptr(out_pkt, &data);
     media_packet_get_buffer_size(out_pkt, &buf_size);
     g_print("output data : %p, size %d\n",data, (int)buf_size);
 
@@ -950,7 +953,7 @@ static void _mediacodec_prepare(App *app)
     media_format_mimetype_e mime;
 
 #if DUMP_OUTBUF
-    fp_out = fopen("/opt/usr/codec_dump.out", "wb");
+    fp_out = fopen("/tmp/codec_dump.out", "wb");
 #endif
     /* create instance */
     ret = mediacodec_create(&app->mc_handle[0]);
