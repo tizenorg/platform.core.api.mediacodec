@@ -131,3 +131,9 @@ void mc_async_queue_flush(async_queue_t *async_queue)
 
     g_mutex_unlock(&async_queue->mutex);
 }
+
+gboolean mc_async_queue_is_empty(async_queue_t *async_queue)
+{
+   return async_queue->head == NULL;
+}
+
