@@ -574,7 +574,7 @@ int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool 
     mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
 
     *caps = gst_caps_new_simple("video/x-raw",
-            "format", G_TYPE_STRING, "I420",
+            "format", G_TYPE_STRING, "SN12",
             "width", G_TYPE_INT, enc_info->width,
             "height", G_TYPE_INT, enc_info->height,
             "framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
@@ -2512,10 +2512,62 @@ static GstBusSyncReply __mc_gst_bus_sync_callback(GstBus *bus, GstMessage *msg, 
     return reply;
 }
 
+int calc_yplane(int width, int height)
+{
+    int mbX, mbY;
+
+    mbX = ALIGN(width, 16);
+    mbY = ALIGN(height, 16);
+
+    return (ALIGN((mbX * mbY) * 256, 256) + 256, (8 * 1024));
+}
+
+int calc_uvplane(int width, int height)
+{
+    int mbX, mbY;
+
+    mbX = ALIGN(width, 16);
+    mbY = ALIGN(height, 16);
+
+    return (ALIGN((mbX * mbY) * 128, 256) + 128, (8 * 1024));
+}
+
+gst_omx_video_enc_input_dump (MMVideoBuffer *inbuf)
+{
+  char *temp = (char *)inbuf->data[0];
+  int i = 0;
+  char filename[100]={0};
+  FILE *fp = NULL;
+
+  LOGW("codec enc input dump start. w = %d, h = %d", inbuf->width[0], inbuf->height[0]);
+  LOGW("codec enc input dump start. w = %d, h = %d", inbuf->width[1], inbuf->height[1]);
+
+  sprintf(filename, "/tmp/enc_input_dump_%d_%d.yuv", inbuf->width[0], inbuf->height[0]);
+  fp = fopen(filename, "ab");
+
+  for (i = 0; i < inbuf->height[0]; i++) {
+      fwrite(temp, inbuf->width[0], 1, fp);
+      temp += inbuf->stride_width[0];
+  }
+
+  //temp = (char*)inbuf->data[0] + inbuf->stride_width[0] * inbuf->stride_height[0];
+  temp = (char*)inbuf->data[1];
+
+  for(i = 0; i < inbuf->height[1] ; i++) {
+      fwrite(temp, inbuf->width[1], 1, fp);
+      temp += inbuf->stride_width[1];
+  }
+  LOGW("codec encoder input dumped!!");
+  fclose(fp);
+}
+
 static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet_h pkt)
 {
+    int i;
+    int num_bos;
     tbm_surface_h surface = NULL;
     tbm_bo bo = NULL;
+    tbm_bo bo1 = NULL;
     mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
 
     if (!pkt) {
@@ -2532,9 +2584,14 @@ static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet
     memset(mm_vbuffer, 0x00, sizeof(MMVideoBuffer));
 
     media_packet_get_tbm_surface(pkt, &surface);
-    bo = tbm_surface_internal_get_bo(surface, 0);
+    num_bos = tbm_surface_internal_get_num_bos(surface);
 
-    tbm_bo_handle handle = tbm_bo_get_handle(bo, TBM_DEVICE_CPU);
+    for (i = 0; i < num_bos; i++) {
+        mm_vbuffer->handle.bo[i] = tbm_surface_internal_get_bo(surface, i);
+        LOGE("mm_vbuffer->handle.bo[%d] : %p", i, mm_vbuffer->handle.bo[i]);
+    }
+
+    tbm_bo_handle handle = tbm_bo_get_handle(mm_vbuffer->handle.bo[0], TBM_DEVICE_CPU);
 #ifdef TIZEN_PROFILE_LITE
     int phy_addr = 0;
     int phy_size = 0;
@@ -2544,16 +2601,34 @@ static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet
         mm_vbuffer->handle.paddr[0] = (void *)phy_addr;
         LOGD("mm_vbuffer->paddr : %p", mm_vbuffer->handle.paddr[0]);
     }
-    LOGD("paddr : %p", phy_addr);
 #endif
 
     mm_vbuffer->type = MM_VIDEO_BUFFER_TYPE_TBM_BO;
-    mm_vbuffer->handle.bo[0] = bo;
-    mm_vbuffer->data[0] =  handle.ptr;
     mm_vbuffer->width[0] = enc_info->width;
     mm_vbuffer->height[0] = enc_info->height;
+    mm_vbuffer->width[1] = enc_info->width;
+    mm_vbuffer->height[1] = enc_info->height>>1;
     mm_vbuffer->stride_width[0] = mm_vbuffer->width[0];
     mm_vbuffer->stride_height[0] = mm_vbuffer->height[0];
+    mm_vbuffer->stride_width[1] = mm_vbuffer->width[0];
+    mm_vbuffer->stride_height[1] = mm_vbuffer->height[0]>>1;
+    mm_vbuffer->plane_num = 2;
+
+
+    mm_vbuffer->data[0] =  handle.ptr;
+    mm_vbuffer->handle.dmabuf_fd[0] = (tbm_bo_get_handle(mm_vbuffer->handle.bo[0], TBM_DEVICE_MM)).u32;
+
+    handle = tbm_bo_get_handle(mm_vbuffer->handle.bo[1], TBM_DEVICE_CPU);
+
+    mm_vbuffer->data[1] =  handle.ptr;
+
+    mm_vbuffer->size[0] = calc_yplane(enc_info->width, enc_info->height);
+    mm_vbuffer->size[1] = calc_uvplane(enc_info->width, enc_info->height);
+    mm_vbuffer->handle.paddr[0] = mm_vbuffer->data[0];
+    mm_vbuffer->handle.paddr[1] = mm_vbuffer->data[1];
+    mm_vbuffer->handle.dmabuf_fd[1] = (tbm_bo_get_handle(mm_vbuffer->handle.bo[0], TBM_DEVICE_MM)).u32;
+
+    gst_omx_video_enc_input_dump(mm_vbuffer);
 
     return mm_vbuffer;
 }
