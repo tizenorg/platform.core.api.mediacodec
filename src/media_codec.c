@@ -320,7 +320,6 @@ int mediacodec_flush_buffers(mediacodec_h mediacodec)
     if (ret != MEDIACODEC_ERROR_NONE) {
         return __convert_error_code(ret, (char *)__FUNCTION__);
     } else {
-        handle->state = MEDIACODEC_STATE_IDLE;
         return MEDIACODEC_ERROR_NONE;
     }
 }
