@@ -1041,7 +1041,7 @@ int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, b
     } else if (core->codec_id == MEDIACODEC_WMAPRO) {
         format_tag = 354;       /* 0x162 */
         wma_version = 3;
-    } else if (core->codec_id == MEDIACODEC_WMAPRO) {
+    } else if (core->codec_id == MEDIACODEC_WMALSL) {
         format_tag = 355;       /* 0x163 */
         wma_version = 3;
     } else {
@@ -1073,50 +1073,39 @@ int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, b
     return ret;
 }
 
-/**
- * _gst_caps_set_buffer_array:
- * @caps: a #GstCaps
- * @field: field in caps to set
- * @buf: header buffers
- *
- * Adds given buffers to an array of buffers set as the given @field
- * on the given @caps.  List of buffer arguments must be NULL-terminated.
- *
- * Returns: input caps with a streamheader field added, or NULL if some error
- */
-static GstCaps *__mc_gst_caps_set_buffer_array(GstCaps * caps, const gchar * field, GstBuffer * buf, ...)
+static GstCaps *__mc_caps_buffer_set_array(GstCaps * caps, const gchar * name, GstBuffer * buf, ...)
 {
-    GstStructure *structure = NULL;
+    GstStructure *struc = NULL;
     va_list va;
-    GValue array = { 0 };
-    GValue value = { 0 };
+    GValue arr_val = { 0 };
+    GValue buf_val = { 0 };
 
+    g_return_val_if_fail(name != NULL, NULL);
     g_return_val_if_fail(caps != NULL, NULL);
     g_return_val_if_fail(gst_caps_is_fixed(caps), NULL);
-    g_return_val_if_fail(field != NULL, NULL);
-
     caps = gst_caps_make_writable(caps);
-    structure = gst_caps_get_structure(caps, 0);
 
-    g_value_init(&array, GST_TYPE_ARRAY);
+    struc = gst_caps_get_structure(caps, 0);
+    if (!struc)
+        LOGW("cannot get structure from caps.\n");
+
+    g_value_init(&arr_val, GST_TYPE_ARRAY);
 
     va_start(va, buf);
-    /* put buffers in a fixed list */
     while (buf) {
-        g_value_init(&value, GST_TYPE_BUFFER);
-        gst_value_set_buffer(&value, buf);
-        gst_value_array_append_value(&array, &value);
-        g_value_unset(&value);
+        g_value_init(&buf_val, GST_TYPE_BUFFER);
+        gst_value_set_buffer(&buf_val, buf);
+        gst_value_array_append_value(&arr_val, &buf_val);
+        g_value_unset(&buf_val);
 
         buf = va_arg(va, GstBuffer *);
     }
     va_end(va);
 
-    gst_structure_take_value(structure, field, &array);
+    gst_structure_take_value(struc, name, &arr_val);
 
     return caps;
 }
-
 
 int __mc_set_caps_streamheader(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer*buff, guint streamheader_size)
 {
@@ -1207,7 +1196,7 @@ int __mc_set_caps_streamheader(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer*
         LOGD("[vorbis] streamheader hsize1 (%d) + hsize2 (%d) + hsize3 (%d) = Total (%d)",
             hsize1, hsize2, hsize3, (hsize1 + hsize2 + hsize3));
 
-        __mc_gst_caps_set_buffer_array(*caps, "streamheader", header1, header2, header3, NULL);
+        __mc_caps_buffer_set_array(*caps, "streamheader", header1, header2, header3, NULL);
 
         gst_buffer_unref(header1);
         gst_buffer_unref(header2);
@@ -1259,7 +1248,7 @@ int __mc_set_caps_streamheader(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer*
         gst_buffer_unmap(header2, &map);
 
         LOGD("[flac] streamheader hsize1 (%d) + hsize2 (%d)  = Total (%d)", hsize1, hsize2, (hsize1 + hsize2));
-        __mc_gst_caps_set_buffer_array(*caps, "streamheader", header1, header2, NULL);
+        __mc_caps_buffer_set_array(*caps, "streamheader", header1, header2, NULL);
         gst_buffer_unref(header1);
         gst_buffer_unref(header2);
     } else {
