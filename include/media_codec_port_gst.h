@@ -110,6 +110,7 @@ struct _mc_gst_core_t
     GMutex eos_mutex;
     GMutex eos_wait_mutex;
     GMutex prepare_lock;
+    GMutex drain_lock;
     GCond eos_cond;
     GCond eos_waiting_cond;
 
@@ -124,6 +125,7 @@ struct _mc_gst_core_t
     bool need_feed;
     bool need_codec_data;
     bool need_sync_flag;
+    bool unprepare_flag;
     unsigned int prepare_count;
     unsigned int num_live_buffers;
     unsigned int queued_count;
@@ -183,6 +185,7 @@ int __mc_vdec_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, 
 int __mc_vdec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config);
 int __mc_h264dec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config);
 int __mc_sprddec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config);
+int __mc_hw_h264enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config);
 int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config);
 int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config);
 int __mc_sprdenc_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config);

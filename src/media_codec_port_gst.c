@@ -71,7 +71,7 @@ static int _mc_link_vtable(mc_gst_core_t *core, mediacodec_codec_type_e id, gboo
 #ifdef TIZEN_PROFILE_LITE
 static int __tbm_get_physical_addr_bo(tbm_bo_handle tbm_bo_handle_fd_t, int *phy_addr, int *phy_size);
 #endif
-static void _mc_gst_flush_buffers(mc_gst_core_t *core);
+static int _mc_gst_flush_buffers(mc_gst_core_t *core);
 static void _mc_gst_set_flush_input(mc_gst_core_t *core);
 static void _mc_gst_set_flush_output(mc_gst_core_t *core);
 
@@ -96,7 +96,7 @@ int(*vdec_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  
                                   &__mc_h264dec_caps};
 int(*venc_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,         /* SPRD H.264 Encoder Vtable */
                                   &__mc_fill_venc_packet_with_outbuf,
-                                  &__mc_venc_caps};
+                                  &__mc_hw_h264enc_caps};
 int(*vdec_mpeg4_sw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* FFMPEG MPEG4 Decoder Vtable */
                                   &__mc_fill_vdec_packet_with_outbuf,
                                   &__mc_vdec_mpeg4_caps};
@@ -375,6 +375,7 @@ int __mc_fill_vdec_packet_with_outbuf(mc_gst_core_t *core, void *data, int size,
     bo[0] = tbm_bo_alloc(core->bufmgr, buf_size, TBM_BO_WC);
     if (!bo[0]) {
         LOGE("bo allocation failed");
+        return MC_ERROR;
     }
 
     tsurf_info.width = dec_info->width;
@@ -407,12 +408,6 @@ int __mc_fill_vdec_packet_with_outbuf(mc_gst_core_t *core, void *data, int size,
     if (tsurf) {
         media_packet_create_from_tbm_surface(core->output_fmt, tsurf,
                 (media_packet_finalize_cb)__mc_output_buffer_finalize_cb, core, pkt);
-    }
-
-    ret = media_packet_get_number_of_video_planes(*pkt, &plane_num);
-    if (ret != MEDIA_PACKET_ERROR_NONE) {
-        LOGW("media_packet_get_number_of_video_planes failed");
-        return MC_ERROR;
     }
 
     return MC_ERROR_NONE;
@@ -585,6 +580,26 @@ int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool 
     return MC_ERROR_NONE;
 }
 
+int __mc_hw_h264enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
+
+    *caps = gst_caps_new_simple("video/x-raw",
+            "format", G_TYPE_STRING, "SN12",
+            "width", G_TYPE_INT, enc_info->width,
+            "height", G_TYPE_INT, enc_info->height,
+            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
+            NULL);
+    //g_object_set(GST_OBJECT(core->codec), "byte-stream", TRUE, NULL);
+    g_object_set(GST_OBJECT(core->codec), "target-bitrate", enc_info->bitrate*1000, NULL);
+
+    LOGD("%d, %d, %d", enc_info->width, enc_info->height, enc_info->fps);
+
+    return MC_ERROR_NONE;
+}
+
 int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
     g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
@@ -676,7 +691,9 @@ int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bo
     *caps = gst_caps_new_simple(core->mime,
             "width", G_TYPE_INT, dec_info->width,
             "height", G_TYPE_INT, dec_info->height,
-            "framerate", GST_TYPE_FRACTION, 30, 1, NULL);
+            "framerate", GST_TYPE_FRACTION, 30, 1,
+            "alignment", G_TYPE_STRING, "au",
+            "stream-format", G_TYPE_STRING, "byte-stream", NULL);
 
     LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
 
@@ -1041,7 +1058,7 @@ int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, b
     } else if (core->codec_id == MEDIACODEC_WMAPRO) {
         format_tag = 354;       /* 0x162 */
         wma_version = 3;
-    } else if (core->codec_id == MEDIACODEC_WMALSL) {
+    } else if (core->codec_id == MEDIACODEC_WMAPRO) {
         format_tag = 355;       /* 0x163 */
         wma_version = 3;
     } else {
@@ -1073,7 +1090,7 @@ int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, b
     return ret;
 }
 
-static GstCaps *__mc_caps_buffer_set_array(GstCaps * caps, const gchar * name, GstBuffer * buf, ...)
+static GstCaps *__mc_gst_caps_set_buffer_array(GstCaps * caps, const gchar * name, GstBuffer * buf, ...)
 {
     GstStructure *struc = NULL;
     va_list va;
@@ -1196,7 +1213,7 @@ int __mc_set_caps_streamheader(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer*
         LOGD("[vorbis] streamheader hsize1 (%d) + hsize2 (%d) + hsize3 (%d) = Total (%d)",
             hsize1, hsize2, hsize3, (hsize1 + hsize2 + hsize3));
 
-        __mc_caps_buffer_set_array(*caps, "streamheader", header1, header2, header3, NULL);
+        __mc_gst_caps_set_buffer_array(*caps, "streamheader", header1, header2, header3, NULL);
 
         gst_buffer_unref(header1);
         gst_buffer_unref(header2);
@@ -1248,7 +1265,7 @@ int __mc_set_caps_streamheader(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer*
         gst_buffer_unmap(header2, &map);
 
         LOGD("[flac] streamheader hsize1 (%d) + hsize2 (%d)  = Total (%d)", hsize1, hsize2, (hsize1 + hsize2));
-        __mc_caps_buffer_set_array(*caps, "streamheader", header1, header2, NULL);
+        __mc_gst_caps_set_buffer_array(*caps, "streamheader", header1, header2, NULL);
         gst_buffer_unref(header1);
         gst_buffer_unref(header2);
     } else {
@@ -1288,9 +1305,9 @@ int __mc_set_caps_codecdata(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *bu
     LOGD("Set caps for codec_data in mime : %s and codec_id (0x%x)", core->mime, core->codec_id);
 
     /* Add the codec_data attribute to caps, if we have it */
-    codecdata_buffer = gst_buffer_new_and_alloc(codecdata_size);
-    gst_buffer_fill(codecdata_buffer, 0, buf_data, codecdata_size);
-
+    codecdata_buffer = gst_buffer_new();
+    gst_buffer_copy_into(codecdata_buffer, buff->buffer, GST_BUFFER_COPY_MEMORY,0, codecdata_size);
+    gst_buffer_ref(codecdata_buffer);
     LOGD("setting codec_data from (packet) buf_data used codecdata_size (%d)", codecdata_size);
 
     gst_caps_set_simple(*caps, "codec_data", GST_TYPE_BUFFER, codecdata_buffer, NULL);
@@ -1298,8 +1315,11 @@ int __mc_set_caps_codecdata(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *bu
 
     /* Update gstbuffer's data ptr and size for using previous codec_data..*/
     LOGD("BEFORE : buff->buffer of size %" G_GSIZE_FORMAT "",  gst_buffer_get_size(buff->buffer));
-    gst_buffer_remove_memory_range(buff->buffer, codecdata_size, -1);
-    gst_buffer_set_size(buff->buffer, buf_size - codecdata_size);
+
+    gst_buffer_replace_memory(buff->buffer, 0,
+        gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, buf_data + codecdata_size , buf_size - codecdata_size, 0,
+        buf_size - codecdata_size, buff, (GDestroyNotify)gst_mediacodec_buffer_finalize));
+
     LOGD("AFTER  : buff->buffer of size %" G_GSIZE_FORMAT "",  gst_buffer_get_size(buff->buffer));
 
     return ret;
@@ -1371,11 +1391,13 @@ mc_gst_core_t *mc_gst_core_new()
     g_mutex_init(&core->eos_mutex);
     g_cond_init(&core->eos_cond);
     g_mutex_init(&core->prepare_lock);
+    g_mutex_init(&core->drain_lock);
 
     core->need_feed = false;
     core->eos = false;
     core->need_codec_data = false;
     core->need_sync_flag = false;
+    core->unprepare_flag = false;
     core->prepare_count = 0;
     core->queued_count = 0;
     core->dequeued_count = 0;
@@ -1400,7 +1422,6 @@ void mc_gst_core_free(mc_gst_core_t *core)
 
     async_queue = core->available_queue;
 
-    _mc_gst_set_flush_input(core);
     mc_async_queue_disable(async_queue->input);
 
     g_atomic_int_set(&async_queue->running, 0);
@@ -1408,9 +1429,11 @@ void mc_gst_core_free(mc_gst_core_t *core)
 
     g_mutex_clear(&core->eos_mutex);
     g_mutex_clear(&core->prepare_lock);
+    g_mutex_clear(&core->drain_lock);
     g_cond_clear(&core->eos_cond);
 
     mc_async_queue_free(async_queue->input);
+    g_free(async_queue);
 
     if (core->ports[1] != NULL) {
         mc_gst_port_free(core->ports[1]);
@@ -1482,6 +1505,7 @@ static void _mc_gst_update_caps(mc_gst_core_t *core, media_packet_h pkt, GstCaps
     if (gst_caps_is_subset(*caps, template_caps)) {
         LOGD("new caps is subset of template caps");
     }
+    gst_object_unref(pad);
 }
 
 static gpointer feed_task(gpointer data)
@@ -1837,12 +1861,15 @@ mc_ret_e mc_gst_unprepare(mc_handle_t *mc_handle)
     if (core) {
         LOGD("@%p(%p) core is uninitializing... v(%d)e(%d)", mc_handle, core, core->video, core->encoder);
 
+        g_mutex_lock(&core->drain_lock);
+        core->unprepare_flag = TRUE;
+        g_mutex_unlock(&core->drain_lock);
+
         if (core->eos) {
             _mc_send_eos_signal(core);
         }
 
-        _mc_gst_flush_buffers(core);
-
+        _mc_gst_set_flush_input(core);
 
         ret = _mc_gst_destroy_pipeline(core);
 
@@ -1900,12 +1927,18 @@ mc_ret_e mc_gst_process_input(mc_handle_t *mc_handle, media_packet_h inbuf, uint
     if (core->prepare_count == 0)
         return MEDIACODEC_ERROR_INVALID_STATE;
 
-    if (!core->eos)
-        mc_async_queue_push(core->available_queue->input, inbuf);
-    else
-        ret = MC_INVALID_IN_BUF;
+    g_mutex_lock(&core->drain_lock);
 
-    LOGI("@%p v(%d)e(%d)process_input(%d)", core, core->video, core->encoder, core->queued_count);
+    if (!core->eos || !core->unprepare_flag) {
+        mc_async_queue_push(core->available_queue->input, inbuf);
+
+    } else {
+        ret = MC_INVALID_IN_BUF;
+        return ret;
+    }
+
+    g_mutex_unlock(&core->drain_lock);
+    LOGI("@v(%d)e(%d)process_input(%d): %p", core->video, core->encoder, core->queued_count, inbuf);
     core->queued_count++;
 
     MEDIACODEC_FLEAVE();
@@ -1956,9 +1989,9 @@ mc_ret_e mc_gst_flush_buffers(mc_handle_t *mc_handle)
         return MC_PARAM_ERROR;
 
     core = (mc_gst_core_t *)mc_handle->core;
-    LOGI("@%p v(%d)e(%d) get_output", core, core->video, core->encoder);
+    LOGI("@%p v(%d)e(%d) flush_buffers", core, core->video, core->encoder);
 
-    _mc_gst_flush_buffers(core);
+    ret = _mc_gst_flush_buffers(core);
 
     MEDIACODEC_FLEAVE();
 
@@ -2117,7 +2150,11 @@ mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t *core, gchar *factory_name)
         gst_bin_add_many(GST_BIN(core->pipeline), core->appsrc, core->capsfilter, core->codec, core->fakesink, NULL);
 
         /* link elements */
-        gst_element_link_many(core->appsrc, core->capsfilter, core->codec, core->fakesink, NULL);
+        if (!(gst_element_link_many(core->appsrc, core->capsfilter, core->codec, core->fakesink, NULL)))
+        {
+            LOGE("gst_element_link_many is failed");
+            goto ERROR;
+        }
 
         /* connect signals, bus watcher */
         bus = gst_pipeline_get_bus(GST_PIPELINE(core->pipeline));
@@ -2283,10 +2320,36 @@ void __mc_gst_buffer_add(GstElement *element, GstBuffer *buffer, GstPad *pad, gp
 int __mc_output_buffer_finalize_cb(media_packet_h packet, int error_code, void *user_data)
 {
     void *buffer = NULL;
+    int i = 0;
+    guint n;
+    GstMemory *mem;
+    GstMapInfo map = GST_MAP_INFO_INIT;
+    MMVideoBuffer *mm_video_buf = NULL;
+    mc_gst_core_t *core = NULL;
+
+    core = (mc_gst_core_t*)user_data;
 
     LOGD("packet finalized: %p", packet);
     media_packet_get_extra(packet, &buffer);
 
+    n = gst_buffer_n_memory(buffer);
+
+    if (n > 1) {
+        mem = gst_buffer_peek_memory(buffer,n-1);
+        gst_memory_map(mem, &map, GST_MAP_READ);
+        mm_video_buf = (MMVideoBuffer *)map.data;
+
+        if (!mm_video_buf) {
+            LOGW("gstbuffer map.data is null");
+        } else {
+            for (i = 0; i < MM_VIDEO_BUFFER_PLANE_MAX; i++) {
+                if (mm_video_buf->handle.bo[i]) {
+                    tbm_bo_unref (mm_video_buf->handle.bo[i]);
+                }
+            }
+        }
+        gst_memory_unmap(mem, &map);
+    }
     gst_buffer_unref((GstBuffer *)buffer);
 
     return MEDIA_PACKET_FINALIZE;
@@ -2503,8 +2566,10 @@ static GstBusSyncReply __mc_gst_bus_sync_callback(GstBus *bus, GstMessage *msg, 
 
 static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet_h pkt)
 {
+    int i;
+    int num_bos;
     tbm_surface_h surface = NULL;
-    tbm_bo bo = NULL;
+    tbm_surface_info_s surface_info;
     mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
 
     if (!pkt) {
@@ -2521,9 +2586,21 @@ static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet
     memset(mm_vbuffer, 0x00, sizeof(MMVideoBuffer));
 
     media_packet_get_tbm_surface(pkt, &surface);
-    bo = tbm_surface_internal_get_bo(surface, 0);
+    num_bos = tbm_surface_internal_get_num_bos(surface);
+    int err = tbm_surface_get_info((tbm_surface_h)surface, &surface_info);
+    if (err == TBM_SURFACE_ERROR_NONE)
+    {
+        LOGE("get tbm surface is failed");
+        free(mm_vbuffer);
+        return NULL;
+    }
 
-    tbm_bo_handle handle = tbm_bo_get_handle(bo, TBM_DEVICE_CPU);
+    for (i = 0; i < num_bos; i++) {
+        mm_vbuffer->handle.bo[i] = tbm_surface_internal_get_bo(surface, i);
+        LOGE("mm_vbuffer->handle.bo[%d] : %p", i, mm_vbuffer->handle.bo[i]);
+    }
+
+    tbm_bo_handle handle = tbm_bo_get_handle(mm_vbuffer->handle.bo[0], TBM_DEVICE_CPU);
 #ifdef TIZEN_PROFILE_LITE
     int phy_addr = 0;
     int phy_size = 0;
@@ -2533,16 +2610,20 @@ static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet
         mm_vbuffer->handle.paddr[0] = (void *)phy_addr;
         LOGD("mm_vbuffer->paddr : %p", mm_vbuffer->handle.paddr[0]);
     }
-    LOGD("paddr : %p", phy_addr);
 #endif
 
     mm_vbuffer->type = MM_VIDEO_BUFFER_TYPE_TBM_BO;
-    mm_vbuffer->handle.bo[0] = bo;
-    mm_vbuffer->data[0] =  handle.ptr;
-    mm_vbuffer->width[0] = enc_info->width;
-    mm_vbuffer->height[0] = enc_info->height;
-    mm_vbuffer->stride_width[0] = mm_vbuffer->width[0];
-    mm_vbuffer->stride_height[0] = mm_vbuffer->height[0];
+    mm_vbuffer->width[0] = surface_info.width;
+    mm_vbuffer->height[0] = surface_info.height;
+    mm_vbuffer->width[1] = surface_info.width;
+    mm_vbuffer->height[1] = surface_info.height>>1;
+    mm_vbuffer->stride_width[0] = surface_info.planes[0].stride;
+    mm_vbuffer->stride_height[0] = surface_info.planes[0].size / surface_info.planes[0].stride;
+    mm_vbuffer->stride_width[1] = surface_info.planes[1].stride;
+    mm_vbuffer->stride_height[1] = surface_info.planes[1].size / surface_info.planes[1].stride;
+    mm_vbuffer->plane_num = 2;
+
+    LOGD("size[0] : %d, size[1] : %d, bo[0] :%p, bo[1] :%p", mm_vbuffer->size[0], mm_vbuffer->size[1], mm_vbuffer->handle.bo[0], mm_vbuffer->handle.bo[1]);
 
     return mm_vbuffer;
 }
@@ -2559,7 +2640,7 @@ static void gst_mediacodec_buffer_finalize(GstMCBuffer *mc_buffer)
                 (mc_buffer->pkt, core->user_data[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER]);
     }
 
-    LOGD("%p buffer finalized...", mc_buffer);
+    LOGD("%p(%p) buffer finalized...", mc_buffer, mc_buffer->pkt);
     free(mc_buffer);
     mc_buffer = NULL;
 
@@ -2752,24 +2833,29 @@ INTERNAL_ERROR:
     return MEDIACODEC_ERROR_INTERNAL;
 }
 
-static void _mc_gst_flush_buffers(mc_gst_core_t *core)
+static int _mc_gst_flush_buffers(mc_gst_core_t *core)
 {
-    int ret = MC_ERROR_NONE;
+    gboolean ret = FALSE;
+    GstEvent *event = NULL;
 
     MEDIACODEC_FENTER();
+
     _mc_gst_set_flush_input(core);
-    ret = gst_pad_push_event(core->pipeline, gst_event_new_flush_start());
-    if (ret != MC_ERROR_NONE) {
-        LOGE("failed to send flush_start event");
+
+    event = gst_event_new_seek(1.0, GST_FORMAT_BYTES, GST_SEEK_FLAG_FLUSH,
+            GST_SEEK_TYPE_SET, 0, GST_SEEK_TYPE_NONE, -1);
+
+    ret = gst_element_send_event(core->appsrc, event);
+    if (ret != TRUE) {
+        LOGE("failed to send seek event");
+        return MC_ERROR;
     }
 
-    ret = gst_pad_push_event(core->pipeline, gst_event_new_flush_stop(TRUE));
-    if (ret != MC_ERROR_NONE) {
-        LOGE("failed to send flush_stop event");
-    }
-
+    _mc_gst_set_flush_output(core);
 
     MEDIACODEC_FLEAVE();
+
+    return MC_ERROR_NONE;
 }
 
 
@@ -2778,8 +2864,11 @@ static void _mc_gst_set_flush_input(mc_gst_core_t *core)
     media_packet_h pkt = NULL;
 
     LOGI("_mc_gst_set_flush_input is called");
-    while (pkt != mc_async_queue_pop_forced(core->available_queue->input)) {
-        LOGD("%p pkt is poped");
+
+    while (!mc_async_queue_is_empty(core->available_queue->input))
+    {
+        pkt = mc_async_queue_pop_forced(core->available_queue->input);
+
         if (core->user_cb[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER]) {
             ((mc_empty_buffer_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER])
                 (pkt, core->user_data[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER]);

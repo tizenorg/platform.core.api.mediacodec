@@ -77,7 +77,6 @@ int mc_create(MMHandleType *mediacodec)
 
     /* create encoder map from ini */
     _mc_create_encoder_map_from_ini(new_mediacodec);
-    g_mutex_init(&new_mediacodec->cmd_lock);
 
     *mediacodec = (MMHandleType)new_mediacodec;
 
@@ -98,8 +97,6 @@ int mc_destroy(MMHandleType mediacodec)
         return MC_INVALID_ARG;
     }
 
-    MEDIACODEC_CMD_LOCK(mediacodec);
-
     LOGD("mediacodec : %p", mediacodec);
 
     if (mc_handle->core != NULL) {
@@ -111,8 +108,6 @@ int mc_destroy(MMHandleType mediacodec)
 
     mc_handle->is_prepared = false;
     g_list_free(mc_handle->supported_codecs);
-
-    MEDIACODEC_CMD_UNLOCK(mediacodec);
 
     /* free mediacodec structure */
     if (mc_handle) {
@@ -298,8 +293,6 @@ int mc_prepare(MMHandleType mediacodec)
     if (!mc_handle->is_prepared)
         return MC_NOT_INITIALIZED;
 
-    MEDIACODEC_CMD_LOCK(mediacodec);
-
     /* setting core details */
     switch (mc_handle->port_type) {
         case MEDIACODEC_PORT_TYPE_GENERAL:
@@ -322,8 +315,6 @@ int mc_prepare(MMHandleType mediacodec)
         break;
     }
 
-    MEDIACODEC_CMD_UNLOCK(mediacodec);
-
     return ret;
 }
 
@@ -336,8 +327,6 @@ int mc_unprepare(MMHandleType mediacodec)
         LOGE("fail invaild param\n");
         return MC_INVALID_ARG;
     }
-
-    MEDIACODEC_CMD_LOCK(mediacodec);
 
     /* deinit core details */
     switch (mc_handle->port_type) {
@@ -361,8 +350,6 @@ int mc_unprepare(MMHandleType mediacodec)
             break;
     }
 
-    MEDIACODEC_CMD_UNLOCK(mediacodec);
-
     return ret;
 }
 
@@ -383,8 +370,6 @@ int mc_process_input(MMHandleType mediacodec, media_packet_h inbuf, uint64_t tim
         }
     }
 
-    MEDIACODEC_CMD_LOCK(mediacodec);
-
     switch (mc_handle->port_type) {
         case MEDIACODEC_PORT_TYPE_GENERAL:
         break;
@@ -402,8 +387,6 @@ int mc_process_input(MMHandleType mediacodec, media_packet_h inbuf, uint64_t tim
             break;
     }
 
-    MEDIACODEC_CMD_UNLOCK(mediacodec);
-
     return ret;
 }
 
@@ -416,8 +399,6 @@ int mc_get_output(MMHandleType mediacodec, media_packet_h *outbuf, uint64_t time
         LOGE("fail invaild param\n");
         return MC_INVALID_ARG;
     }
-
-    MEDIACODEC_CMD_LOCK(mediacodec);
 
     /* setting core details */
     switch (mc_handle->port_type) {
@@ -437,8 +418,6 @@ int mc_get_output(MMHandleType mediacodec, media_packet_h *outbuf, uint64_t time
             break;
     }
 
-    MEDIACODEC_CMD_UNLOCK(mediacodec);
-
     return ret;
 }
 
@@ -451,8 +430,6 @@ int mc_flush_buffers(MMHandleType mediacodec)
         LOGE("fail invaild param\n");
         return MC_INVALID_ARG;
     }
-
-    MEDIACODEC_CMD_LOCK(mediacodec);
 
     /* setting core details */
     switch (mc_handle->port_type) {
@@ -472,7 +449,6 @@ int mc_flush_buffers(MMHandleType mediacodec)
             break;
     }
 
-    MEDIACODEC_CMD_UNLOCK(mediacodec);
     return ret;
 }
 
