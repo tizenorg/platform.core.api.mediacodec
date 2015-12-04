@@ -176,6 +176,9 @@ media_format_h venc_fmt = NULL;
 #if DUMP_OUTBUF
 FILE *fp_out = NULL;
 #endif
+FILE *fp = NULL;
+char filename[100]="mc_dump.out";
+int allow_dump = 0;
 
 /* Internal Functions */
 static int _create_app(void *data);
@@ -681,7 +684,61 @@ static void _mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data)
     return;
 }
 
-int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
+static int GetChunkSize(App *app)
+{
+    /* The return values are based on testing trails and are not unique */
+    if(app->type==AUDIO_ENC)
+           return 640;
+    switch (app->mime)
+    {
+        case MEDIA_FORMAT_AMR_NB:
+        case MEDIA_FORMAT_AMR_WB:
+            return 50;
+
+        case MEDIA_FORMAT_AAC_LC:
+        case MEDIA_FORMAT_AAC_HE:
+        case MEDIA_FORMAT_AAC_HE_PS:
+            return 500;
+
+        case MEDIA_FORMAT_FLAC:
+            return 5000;
+
+        case MEDIA_FORMAT_WMALSL:
+        case MEDIA_FORMAT_WMAPRO:
+        case MEDIA_FORMAT_WMAV1:
+        case MEDIA_FORMAT_WMAV2:
+            return 1024;
+
+        case MEDIA_FORMAT_MPEG4_SP:
+        case MEDIA_FORMAT_MPEG4_ASP:
+            return app->height*app->width/200;
+
+        case MEDIA_FORMAT_VC1:
+        case MEDIA_FORMAT_VP8:
+        case MEDIA_FORMAT_VP9:
+            return app->height*app->width/500;
+    }
+    if(app->type==AUDIO_DEC)
+        return samplerate/10;
+    return app->height*app->width/50;
+}
+
+void common_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
+{
+    int offset = app->length - app->offset;
+    static int chunk_size = 0;
+
+    if(!chunk_size)
+        chunk_size =  GetChunkSize(app);
+
+    *have_frame = TRUE;
+    *data = app->data + app->offset;
+    *size = (chunk_size <= offset) ? chunk_size : offset;
+
+    app->offset += *size;
+}
+
+int  _mediacodec_set_codec(int typ, int codecid, int flag, int *hardware)
 {
     bool encoder;
     //bool hardware;
@@ -691,53 +748,36 @@ int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
 
     switch (codecid) {
         case MEDIACODEC_H264:
-            if (encoder) {
-                extractor = yuv_extractor;
-                mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
-            } else {
-                extractor = h264_extractor;
-                mime = MEDIA_FORMAT_H264_SP;
-            }
+            extractor = h264_extractor;
+            mime = MEDIA_FORMAT_H264_SP;
             break;
         case MEDIACODEC_MPEG4:
-            if (encoder) {
-                extractor = yuv_extractor;
-                mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
-            } else {
-                extractor = h264_extractor;
-                mime = MEDIA_FORMAT_MPEG4_SP;
-            }
+            extractor = h264_extractor;
+            mime = MEDIA_FORMAT_MPEG4_SP;
             break;
         case MEDIACODEC_H263:
-            if (encoder) {
-                extractor = yuv_extractor;
-                mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
-            } else {
-                extractor = h264_extractor;
-                mime = MEDIA_FORMAT_H263P;
-            }
+            extractor = h264_extractor;
+            mime = MEDIA_FORMAT_H263P;
             break;
         case MEDIACODEC_AAC:
-            if (encoder) {
-                extractor = aacenc_extractor;
-                mime = MEDIA_FORMAT_PCM;
-            } else {
-                extractor = aacdec_extractor;
-                mime = MEDIA_FORMAT_AAC;
-            }
+            extractor = aacdec_extractor;
+            mime = MEDIA_FORMAT_AAC;
             break;
         case MEDIACODEC_AAC_HE:
-            if (encoder) {
-                extractor = aacenc_extractor;
-                mime = MEDIA_FORMAT_PCM;
-            } else {
-                //extractor = aacdec_extractor;
-                mime = MEDIA_FORMAT_AAC_HE;
-            }
+            //extractor = aacdec_extractor;
+            mime = MEDIA_FORMAT_AAC_HE;
             break;
         case MEDIACODEC_AAC_HE_PS:
             break;
         case MEDIACODEC_MP3:
+            extractor = mp3dec_extractor;
+            mime = MEDIA_FORMAT_MP3;
+            break;
+        case MEDIACODEC_AMR_NB:
+            extractor = mp3dec_extractor;
+            mime = MEDIA_FORMAT_AMR_NB;
+            break;
+        case MEDIACODEC_AMR_WB:
             extractor = mp3dec_extractor;
             mime = MEDIA_FORMAT_MP3;
             break;
@@ -753,10 +793,37 @@ int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
             break;
         case MEDIACODEC_WMALSL:
             break;
-        default:
+        case MEDIACODEC_H261:
+            mime = MEDIA_FORMAT_H261;
+            break;
+        case MEDIACODEC_MPEG2:
+            mime = MEDIA_FORMAT_MPEG2_SP;
+            break;
+        case MEDIACODEC_VC1:
+            mime = MEDIA_FORMAT_MPEG4_SP;
+            break;
+        case MEDIACODEC_VP8:
+            mime = MEDIA_FORMAT_VP8;
+            break;
+        case MEDIACODEC_VP9:
+            mime = MEDIA_FORMAT_VP9;
+            break;
+        case MEDIACODEC_HEVC:
+            mime = MEDIA_FORMAT_HEVC;
+            break;
+	default:
             LOGE("NOT SUPPORTED!!!!");
             break;
     }
+
+    if(typ != VIDEO_ENC)
+        extractor = common_extractor;
+    else
+    {
+        extractor = yuv_extractor;
+        mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+    }
+
     //media_format_set_video_mime(vdec_fmt, mime);
     return mime;
 }
@@ -893,7 +960,7 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
     if (ret != MEDIACODEC_ERROR_NONE) {
         g_print("get_output failed\n");
     }
-    //decoder_output_dump(app, out_pkt);
+    decoder_output_dump(app, out_pkt);
 
 #if DUMP_OUTBUF
     void *data;
@@ -952,6 +1019,15 @@ static void _mediacodec_prepare(App *app)
 #if DUMP_OUTBUF
     fp_out = fopen("/opt/usr/codec_dump.out", "wb");
 #endif
+
+    if(allow_dump && filename[0])
+    {
+        //sprintf(filename, "/opt/usr/dec_output_dump_%d_%d.yuv", app->width, app->height);
+        fp = fopen(filename, "wb");
+        if(fp == NULL)
+            g_print("File %s create failed\n", filename);
+    }
+
     /* create instance */
     ret = mediacodec_create(&app->mc_handle[0]);
     if (ret  != MEDIACODEC_ERROR_NONE) {
@@ -967,7 +1043,7 @@ static void _mediacodec_prepare(App *app)
     }
 
 
-    app->mime = _mediacodec_set_codec(app->codecid, app->flag, &app->hardware);
+    app->mime = _mediacodec_set_codec(app->type,app->codecid, app->flag, &app->hardware);
 
     /* set codec info */
     ret = media_format_create(&vdec_fmt);
@@ -1033,6 +1109,8 @@ static void _mediacodec_prepare(App *app)
 
     g_print("---------------------------\n");
 
+    if(fp)
+        fclose(fp);
 
     return;
 }
@@ -1402,7 +1480,7 @@ static void interpret (char *cmd, App *app)
         case CURRENT_STATUS_GET_OUTPUT:
             {
                 static int num = 0;
-                num = atoi(cmd);
+                allow_dump = num = atoi(cmd);
                 //_mediacodec_get_output_n(num);
                 reset_menu_state();
             }
@@ -1532,12 +1610,32 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
     unsigned char *temp;
     int i = 0;
     int stride_width, stride_height;
-    char filename[100]={0};
-    FILE *fp = NULL;
     int ret =0;
 
-    sprintf(filename, "/opt/usr/dec_output_dump_%d_%d.yuv", app->width, app->height);
-    fp = fopen(filename, "ab");
+    if(fp == NULL)
+        return;
+
+    if(app->type != VIDEO_DEC)
+    {
+        void *data = NULL;
+        uint64_t buf_size = 0;
+        static int bFirst = 1;
+
+        if(bFirst)
+        {
+            bFirst = 0;
+            if(app->type != AUDIO_DEC && app->codecid == MEDIACODEC_AMR_NB)
+            {
+                static const char AMR_header [] = "#!AMR\n";
+                fwrite(&AMR_header[0], 1, sizeof(AMR_header)-1, fp);
+            }
+        }
+
+        media_packet_get_buffer_size(pkt, &buf_size);
+        media_packet_get_buffer_data_ptr(pkt, &data);
+	fwrite(data, 1, buf_size, fp);
+        return;
+    }
 
     media_packet_get_video_plane_data_ptr(pkt, 0, &temp);
     media_packet_get_video_stride_width(pkt, 0, &stride_width);
@@ -1570,9 +1668,8 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
             temp += stride_width;
         }
     }
+    fflush(fp);
 
     g_print("codec dec output dumped!!%d\n", ret);
-    fclose(fp);
-
 }
 

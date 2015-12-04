@@ -83,81 +83,6 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest,
 static void _mc_send_eos_signal(mc_gst_core_t *core);
 static void _mc_wait_for_eos(mc_gst_core_t *core);
 
-/* video vtable */
-int(*vdec_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_vdec_packet_with_outbuf,  &__mc_vdec_caps};
-int(*venc_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_venc_packet_with_outbuf, &__mc_venc_caps};
-
-
-int(*vdec_h264_sw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* FFMPEG H.264 Decoder Vtable */
-                                  &__mc_fill_vdec_packet_with_outbuf,
-                                  &__mc_vdec_caps};
-int(*vdec_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* SPRD H.264 Decoder Vtable */
-                                  &__mc_fill_video_packet_with_mm_video_buffer,
-                                  &__mc_h264dec_caps};
-int(*venc_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,         /* SPRD H.264 Encoder Vtable */
-                                  &__mc_fill_venc_packet_with_outbuf,
-                                  &__mc_hw_h264enc_caps};
-int(*vdec_mpeg4_sw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* FFMPEG MPEG4 Decoder Vtable */
-                                  &__mc_fill_vdec_packet_with_outbuf,
-                                  &__mc_vdec_mpeg4_caps};
-int(*vdec_mpeg4_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* SPRD MPEG4 Decoder Vtable */
-                                  &__mc_fill_video_packet_with_mm_video_buffer,
-                                  &__mc_sprddec_mpeg4_caps};
-int(*venc_mpeg4_sw_vtable[])() = {&__mc_fill_inbuf_with_venc_packet,            /* SPRD MPEG4 Encoder Vtable */
-                                  &__mc_fill_venc_packet_with_outbuf,
-                                  &__mc_venc_caps};
-int(*venc_mpeg4_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,        /* SPRD MPEG4 Encoder Vtable */
-                                  &__mc_fill_venc_packet_with_outbuf,
-                                  &__mc_sprdenc_mpeg4_caps};
-int(*vdec_h263_sw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* FFMPEG MPEG4 Decoder Vtable */
-                                  &__mc_fill_vdec_packet_with_outbuf,
-                                  &__mc_vdec_h263_caps};
-int(*vdec_h263_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* SPRD MPEG4 Decoder Vtable */
-                                  &__mc_fill_video_packet_with_mm_video_buffer,
-                                  &__mc_sprddec_mpeg4_caps};
-int(*venc_h263_sw_vtable[])() = {&__mc_fill_inbuf_with_venc_packet,            /* SPRD MPEG4 Encoder Vtable */
-                                  &__mc_fill_venc_packet_with_outbuf,
-                                  &__mc_venc_caps};
-int(*venc_h263_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,        /* SPRD MPEG4 Encoder Vtable */
-                                  &__mc_fill_venc_packet_with_outbuf,
-                                  &__mc_sprdenc_mpeg4_caps};
-
-/* audio vtable */
-int(*aenc_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_packet_with_outbuf, &__mc_aenc_caps};
-int(*adec_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_packet_with_outbuf, &__mc_adec_caps};
-
-int(*aenc_aac_vtable[])() = {&__mc_fill_inbuf_with_packet,                    /* AAC LC Encoder vtable */
-                              &__mc_fill_packet_with_outbuf,
-                              &__mc_aenc_aac_caps};
-int(*adec_aac_vtable[])() = {&__mc_fill_inbuf_with_packet,                    /* AAC LC Decoder Vtable */
-                              &__mc_fill_packet_with_outbuf,
-                              &__mc_adec_aac_caps};
-int(*adec_aacv12_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* AAC HE Decoder Vtable */
-                                &__mc_fill_packet_with_outbuf,
-                                &__mc_adec_aacv12_caps};
-int(*adec_mp3_vtable[])() = {&__mc_fill_inbuf_with_packet,                    /* MP3 Decoder Vtable */
-                              &__mc_fill_packet_with_outbuf,
-                              &__mc_adec_mp3_caps};
-int(*adec_amrnb_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* AMR-NB Decoder Vtable */
-                                &__mc_fill_packet_with_outbuf,
-                                &__mc_adec_amrnb_caps};
-int(*adec_amrwb_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* AMR-WB Decoder Vtable */
-                                &__mc_fill_packet_with_outbuf,
-                                &__mc_adec_amrwb_caps};
-int(*aenc_amrnb_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* AMR-NB Encoder Vtable */
-                              &__mc_fill_packet_with_outbuf,
-                              &__mc_aenc_amrnb_caps};
-int(*adec_vorbis_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* VORBIS Decoder Vtable */
-                                &__mc_fill_packet_with_outbuf,
-                                &__mc_adec_vorbis_caps};
-int(*adec_flac_vtable[])() = {&__mc_fill_inbuf_with_packet,                   /* FLAC Decoder Vtable */
-                              &__mc_fill_packet_with_outbuf,
-                              &__mc_adec_flac_caps};
-int(*adec_wma_vtable[])() = {&__mc_fill_inbuf_with_packet,                    /* WMA Decoder Vtable */
-                              &__mc_fill_packet_with_outbuf,
-                              &__mc_adec_wma_caps};
-
-
 /*
  * fill_inbuf virtual functions
 */
@@ -532,6 +457,16 @@ int __mc_fill_venc_packet_with_outbuf(mc_gst_core_t *core, void *data, int size,
             if (!_mc_check_h263_out_bytestream((unsigned char *)data, size, &sync_flag))
                 return MC_INVALID_IN_BUF;
             break;
+        case MEDIA_FORMAT_H261:
+        case MEDIA_FORMAT_HEVC:
+        case MEDIA_FORMAT_MJPEG:
+        case MEDIA_FORMAT_MPEG2_SP:
+        case MEDIA_FORMAT_MPEG2_MP:
+        case MEDIA_FORMAT_MPEG2_HP:
+        case MEDIA_FORMAT_VP8:
+        case MEDIA_FORMAT_VP9:
+            break;
+
         default:
             return MC_INVALID_IN_BUF;
     }
@@ -559,772 +494,10 @@ int __mc_fill_venc_packet_with_outbuf(mc_gst_core_t *core, void *data, int size,
 
 int __mc_create_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
-    return core->vtable[create_caps](core, caps, buff, codec_config);
+    if(core->vtable[create_caps])
+        return core->vtable[create_caps](core, caps, buff, codec_config);
+    return 0;
 }
-
-int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple("video/x-raw",
-            "format", G_TYPE_STRING, "I420",
-            "width", G_TYPE_INT, enc_info->width,
-            "height", G_TYPE_INT, enc_info->height,
-            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
-            NULL);
-
-    LOGD("%d, %d, %d", enc_info->width, enc_info->height, enc_info->fps);
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_hw_h264enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple("video/x-raw",
-            "format", G_TYPE_STRING, "SN12",
-            "width", G_TYPE_INT, enc_info->width,
-            "height", G_TYPE_INT, enc_info->height,
-            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
-            NULL);
-    //g_object_set(GST_OBJECT(core->codec), "byte-stream", TRUE, NULL);
-    g_object_set(GST_OBJECT(core->codec), "target-bitrate", enc_info->bitrate*1000, NULL);
-
-    LOGD("%d, %d, %d", enc_info->width, enc_info->height, enc_info->fps);
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "format", G_TYPE_STRING, "SN12",
-            "width", G_TYPE_INT, enc_info->width,
-            "height", G_TYPE_INT, enc_info->height,
-            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1, NULL);
-
-    g_object_set(GST_OBJECT(core->codec), "byte-stream", TRUE, NULL);
-    g_object_set(GST_OBJECT(core->codec), "bitrate", enc_info->bitrate*1000, NULL);
-
-    LOGD("%s, %d, %d, %d", core->format, enc_info->width, enc_info->height, enc_info->fps);
-
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_sprdenc_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple("video/x-raw",
-            "format", G_TYPE_STRING, "SN12",
-            "width", G_TYPE_INT, enc_info->width,
-            "height", G_TYPE_INT, enc_info->height,
-            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1, NULL);
-
-    g_object_set(GST_OBJECT(core->codec), "bitrate", enc_info->bitrate*1000, NULL);
-
-    LOGD("%s, %d, %d, %d", core->format, enc_info->width, enc_info->height, enc_info->fps);
-
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_h264dec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    LOGD("%d, %d, ", dec_info->width, dec_info->height);
-    *caps = gst_caps_new_simple(core->mime,
-            "parsed", G_TYPE_BOOLEAN, TRUE,
-            "alignment", G_TYPE_STRING, "au",
-            "stream-format", G_TYPE_STRING, "byte-stream",
-            "width", G_TYPE_INT, dec_info->width,
-            "height", G_TYPE_INT, dec_info->height, NULL);
-
-    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
-    return MC_ERROR_NONE;
-}
-
-int __mc_sprddec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    LOGD("%d, %d, ", dec_info->width, dec_info->height);
-
-    *caps = gst_caps_new_simple(core->mime,
-            "mpegversion", G_TYPE_INT, 4,
-            "width", G_TYPE_INT, dec_info->width,
-            "height", G_TYPE_INT, dec_info->height,
-            "framerate", GST_TYPE_FRACTION, 30, 1,
-            NULL);
-
-    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    LOGD("%d, %d, ", dec_info->width, dec_info->height);
-    *caps = gst_caps_new_simple(core->mime,
-            "width", G_TYPE_INT, dec_info->width,
-            "height", G_TYPE_INT, dec_info->height,
-            "framerate", GST_TYPE_FRACTION, 30, 1,
-            "alignment", G_TYPE_STRING, "au",
-            "stream-format", G_TYPE_STRING, "byte-stream", NULL);
-
-    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_vdec_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "variant", G_TYPE_STRING, "itu", NULL);
-
-    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
-    return MC_ERROR_NONE;
-}
-
-int __mc_vdec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "mpegversion", G_TYPE_INT, 4,
-            "systemstream", G_TYPE_BOOLEAN, false, NULL);
-
-    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
-    return MC_ERROR_NONE;
-}
-
-int __mc_vdec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "alignment", G_TYPE_STRING, "au",
-            "stream-format", G_TYPE_STRING, "byte-stream", NULL);
-
-    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
-    return MC_ERROR_NONE;
-}
-
-int __mc_vdec_h264_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "alignment", G_TYPE_STRING, "au",
-            "stream-format", G_TYPE_STRING, "byte-stream", NULL);
-
-    LOGD("mime : %s, widht :%d, height : %d", core->mime, dec_info->width, dec_info->height);
-    return MC_ERROR_NONE;
-}
-
-int __mc_aenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "rate", G_TYPE_INT, enc_info->samplerate,
-            "channels", G_TYPE_INT, enc_info->channel,
-            "format", G_TYPE_STRING, "F32LE",
-            "layout", G_TYPE_STRING, "interleaved", NULL);
-
-/*
-+----GstAudioEncoder
-     +----avenc_aac
-
-Element Properties:
-  compliance          : Adherence of the encoder to the specifications
-                                flags: readable, writable
-                                Enum "GstFFMpegCompliance" Default: 0, "normal"
-                                (2): verystrict         - Strictly conform to older spec
-                                (1): strict                - Strictly conform to current spec
-                                (0): normal             - Normal behavior
-                                (-1): unofficial       - Allow unofficial extensions
-                                (-2): experimental  - Allow nonstandardized experimental things
-*/
-    g_object_set(GST_OBJECT(core->codec), "compliance", -2, NULL);
-
-    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, enc_info->samplerate, enc_info->channel);
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_aenc_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "rate", G_TYPE_INT, enc_info->samplerate,
-            "channels", G_TYPE_INT, enc_info->channel,
-            "format", G_TYPE_STRING, "F32LE",
-            "layout", G_TYPE_STRING, "interleaved", NULL);
-
-    g_object_set(GST_OBJECT(core->codec), "compliance", -2, NULL);
-
-    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, enc_info->samplerate, enc_info->channel);
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "rate", G_TYPE_INT, enc_info->samplerate,
-            "channels", G_TYPE_INT, enc_info->channel,
-            "format", G_TYPE_STRING, "S16LE",
-            "layout", G_TYPE_STRING, "interleaved",
-            NULL);
-
-    LOGD("mime : %s,  samplerate :%d, channel : %d", core->mime, enc_info->samplerate, enc_info->channel);
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_adec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    int ret = MC_ERROR_NONE;
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    LOGD("CAPS for codec_id (MEDIACODEC_AAC_LC - normal ADTS)");
-    *caps = gst_caps_new_simple(core->mime,
-            "framed", G_TYPE_BOOLEAN, TRUE,
-            "mpegversion", G_TYPE_INT, 4,
-            "stream-format", G_TYPE_STRING, "adts",
-            "rate", G_TYPE_INT, dec_info->samplerate,
-            "channels", G_TYPE_INT, dec_info->channel,
-            NULL);
-
-    if (codec_config && (!core->encoder)) {
-        guint codecdata_size = 16;         /*AAC_CODECDATA_SIZE = 16 (in testsuit)*/
-        ret = __mc_set_caps_codecdata(core, caps, buff, codecdata_size);
-        if (ret != MC_ERROR_NONE) {
-            LOGW("__mc_set_caps_codecdata failed");
-            return ret;
-        }
-    }
-
-    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
-
-    return ret;
-}
-
-int __mc_adec_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
-{
-    int ret = MC_ERROR_NONE;
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    LOGD("CAPS for codec_id (MEDIACODEC_AAC_LC - normal ADTS)");
-    *caps = gst_caps_new_simple(core->mime,
-            "framed", G_TYPE_BOOLEAN, TRUE,
-            "mpegversion", G_TYPE_INT, 4,
-            "stream-format", G_TYPE_STRING, "adts",
-            "rate", G_TYPE_INT, dec_info->samplerate,
-            "channels", G_TYPE_INT, dec_info->channel,
-            NULL);
-
-    if (codec_config && (!core->encoder)) {
-        guint codecdata_size = 16;         /*AAC_CODECDATA_SIZE = 16 (in testsuit)*/
-        ret = __mc_set_caps_codecdata(core, caps, buff, codecdata_size);
-        if (ret != MC_ERROR_NONE) {
-            LOGW("__mc_set_caps_codecdata failed");
-            return ret;
-        }
-    }
-
-    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
-
-    return ret;
-}
-
-int __mc_adec_aacv12_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
-{
-    int ret = MC_ERROR_NONE;
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    LOGD("CAPS for codec_id (MEDIACODEC_AAC_HE and _PS - MP4/M4A case)");
-    *caps = gst_caps_new_simple(core->mime,
-            "mpegversion", G_TYPE_INT, 4,     /*TODO : need adding version /profile*/
-            "framed", G_TYPE_BOOLEAN, TRUE,
-            "stream-format", G_TYPE_STRING, "raw",
-            "channels", G_TYPE_INT, dec_info->channel,
-            "rate", G_TYPE_INT, dec_info->samplerate,
-            NULL);
-
-    if (codec_config && (!core->encoder)) {
-        guint codecdata_size = 16;         /*AAC_CODECDATA_SIZE = 16 (in testsuit)*/
-        ret = __mc_set_caps_codecdata(core, caps, buff, codecdata_size);
-        if (ret != MC_ERROR_NONE) {
-            LOGW("__mc_set_caps_codecdata failed");
-            return ret;
-        }
-    }
-
-    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
-
-    return ret;
-}
-
-int __mc_adec_mp3_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "framed", G_TYPE_BOOLEAN, TRUE,
-            "mpegversion", G_TYPE_INT, 1,       /* To-Do : plz check */
-            "mpegaudioversion", G_TYPE_INT, 1,  /* To-Do : plz check */
-            "layer", G_TYPE_INT, 3,             /* To-Do : plz check */
-            "rate", G_TYPE_INT, dec_info->samplerate,
-            "channels", G_TYPE_INT, dec_info->channel,
-            NULL);
-
-    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_adec_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "rate", G_TYPE_INT, 8000,
-            "channels", G_TYPE_INT, dec_info->channel,    /* FIXME - by 1 */
-            NULL);
-
-    LOGD("mime : %s,  samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_adec_amrwb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "rate", G_TYPE_INT, 16000,
-            "channels", G_TYPE_INT, dec_info->channel,    /* FIXME - by 1 */
-            NULL);
-
-    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
-
-    return MC_ERROR_NONE;
-}
-
-int __mc_adec_vorbis_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-    int ret = MC_ERROR_NONE;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "channels", G_TYPE_INT, dec_info->channel,
-            "rate", G_TYPE_INT, dec_info->samplerate,
-            /* FIXME - Insert 'Stream Header' */
-            NULL);
-
-    LOGD(" ----- VORBIS Need Additional Caps -----------");
-    /*
-      * Need to extract from each Stream header ... or
-      * Need to get Demuxer's Caps from each Stream heade
-      */
-    if (codec_config && (!core->encoder)) {
-        guint streamheader_size = 4096;         /* VORBIS_CODECDATA_SIZE = 4096 */
-        ret = __mc_set_caps_streamheader(core, caps, buff, streamheader_size);
-        if (ret != MC_ERROR_NONE) {
-            LOGW("__mc_set_caps_streamheader failed");
-            return ret;
-        }
-    }
-
-    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
-
-    return ret;
-}
-
-int __mc_adec_flac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
-{
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-    int ret = MC_ERROR_NONE;
-
-    *caps = gst_caps_new_simple(core->mime,
-            "channels", G_TYPE_INT, dec_info->channel,
-            "rate", G_TYPE_INT, dec_info->samplerate,
-            "framed", G_TYPE_BOOLEAN, TRUE,
-            /* FIXME - Insert More Info */
-            NULL);
-
-    LOGD(" ----- FLAC Need Additional Caps -----------");
-    /*
-      * Need to extract from each Stream header ... or
-      * Need to get Demuxer's Caps from each Stream heade
-      */
-    if (codec_config && (!core->encoder)) {
-        guint streamheader_size = 4096;         /* FLAC_CODECDATA_SIZE = 4096 */
-        ret = __mc_set_caps_streamheader(core, caps, buff, streamheader_size);
-        if (ret != MC_ERROR_NONE) {
-            LOGW("__mc_set_caps_streamheader failed");
-            return ret;
-        }
-    }
-
-    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
-
-    return ret;
-}
-
-int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, bool codec_config)
-{
-    int ret = MC_ERROR_NONE;
-    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
-    mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
-
-    /*
-      * Need to extract from Stream Type Specific ... or
-      * Need to get Demuxer's Caps from Stream Type Specific
-      */
-    guint16 format_tag = 0;
-    gint wma_version = 0;
-    gint block_align = 1024;      /*FIXME : Need checking */
-    gint bitrate = 128000;        /*FIXME : Need checking */
-
-    LOGD(" ----- WMA Need Additional Caps -----------");
-    if (core->codec_id == MEDIACODEC_WMAV1) {
-        format_tag = 352;       /* 0x160 */
-        wma_version = 1;
-    } else if (core->codec_id == MEDIACODEC_WMAV2) {
-        format_tag = 353;       /* 0x161 */
-        wma_version = 2;
-    } else if (core->codec_id == MEDIACODEC_WMAPRO) {
-        format_tag = 354;       /* 0x162 */
-        wma_version = 3;
-    } else if (core->codec_id == MEDIACODEC_WMALSL) {
-        format_tag = 355;       /* 0x163 */
-        wma_version = 3;
-    } else {
-        LOGE("Not support WMA format");
-    }
-
-    *caps = gst_caps_new_simple(core->mime,
-            "rate", G_TYPE_INT, dec_info->samplerate,
-            "channels", G_TYPE_INT, dec_info->channel,
-            "bitrate", G_TYPE_INT, bitrate,
-            "depth", G_TYPE_INT, dec_info->bit,
-            /* FIXME - Need More Info */
-            "wmaversion", G_TYPE_INT, wma_version,
-            "format_tag", G_TYPE_INT, format_tag,
-            "block_align", G_TYPE_INT, block_align,
-            NULL);
-
-    if (codec_config && (!core->encoder)) {
-        guint codecdata_size = 64;         /* WMA_CODECDATA_SIZE = 64 */
-        ret = __mc_set_caps_codecdata(core, caps, buff, codecdata_size);
-        if (ret != MC_ERROR_NONE) {
-            LOGW("__mc_set_caps_codecdata failed");
-            return ret;
-        }
-    }
-
-    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, dec_info->samplerate, dec_info->channel);
-
-    return ret;
-}
-
-static GstCaps *__mc_gst_caps_set_buffer_array(GstCaps * caps, const gchar * name, GstBuffer * buf, ...)
-{
-    GstStructure *struc = NULL;
-    va_list va;
-    GValue arr_val = { 0 };
-    GValue buf_val = { 0 };
-
-    g_return_val_if_fail(name != NULL, NULL);
-    g_return_val_if_fail(caps != NULL, NULL);
-    g_return_val_if_fail(gst_caps_is_fixed(caps), NULL);
-    caps = gst_caps_make_writable(caps);
-
-    struc = gst_caps_get_structure(caps, 0);
-    if (!struc)
-        LOGW("cannot get structure from caps.\n");
-
-    g_value_init(&arr_val, GST_TYPE_ARRAY);
-
-    va_start(va, buf);
-    while (buf) {
-        g_value_init(&buf_val, GST_TYPE_BUFFER);
-        gst_value_set_buffer(&buf_val, buf);
-        gst_value_array_append_value(&arr_val, &buf_val);
-        g_value_unset(&buf_val);
-
-        buf = va_arg(va, GstBuffer *);
-    }
-    va_end(va);
-
-    gst_structure_take_value(struc, name, &arr_val);
-
-    return caps;
-}
-
-int __mc_set_caps_streamheader(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer*buff, guint streamheader_size)
-{
-    int ret = MEDIA_PACKET_ERROR_NONE;
-    void *buf_data = NULL;
-    uint64_t buf_size = 0;
-    GstBuffer *header1, *header2, *header3;
-    guint hsize1, hsize2, hsize3;
-    GstBuffer *tmp_header;
-    guint8 *tmp_buf = NULL;
-    GstMapInfo map;
-
-    ret = media_packet_get_buffer_size(buff->pkt, &buf_size);
-    if (ret != MEDIA_PACKET_ERROR_NONE) {
-        LOGW("buffer size get fail");
-        return ret;
-    }
-
-    ret = media_packet_get_buffer_data_ptr(buff->pkt, &buf_data);
-    if (ret != MEDIA_PACKET_ERROR_NONE) {
-        LOGW("buffer size get fail");
-        return ret;
-    }
-
-    LOGD("Set caps for streamheader in mime : %s and codec_id (0x%x)", core->mime, core->codec_id);
-
-    if (core->codec_id == MEDIACODEC_VORBIS) {
-        /*
-          * hsize1 : Identification Header (packet type 1) - fixed 30 byte
-          * hsize2 : Comment Header (packet type 3) - variable byte (need calculate)
-          * hsize3 : Setup Header (packet type 5) - variable byte (Used remained bytes)
-        */
-
-        /* First of all, Need to fins and calculate size of hsize2 */
-        tmp_header = gst_buffer_new_and_alloc(streamheader_size);
-        gst_buffer_fill(tmp_header, 0, buf_data, streamheader_size);
-        gst_buffer_map(tmp_header, &map, GST_MAP_READ);
-        tmp_buf = map.data;
-        tmp_buf += (30 + 7);                /* hsize1 + '0x03' + 'vorbis'*/
-        hsize2 = (7 + 4);
-        hsize2 += GST_READ_UINT32_LE(tmp_buf);
-        hsize2 += (4 + 1);
-        LOGD("Find streamheader hsize2(%d)", hsize2);
-        gst_buffer_unmap(tmp_header, &map);
-        gst_buffer_unref(tmp_header);
-
-        /*  hsize1 : Identification Header (packet type 1) - fixed 30 byte */
-        hsize1 = 30;
-        header1 = gst_buffer_new_and_alloc(hsize1);
-        gst_buffer_fill(header1, 0, buf_data, hsize1);
-        gst_buffer_map(header1, &map, GST_MAP_READ);
-        tmp_buf = map.data;
-        /* '0x01' + 'vorbis' */
-        if (*tmp_buf != 0x01) {
-            LOGE("[ERROR] Invalid Caps of Stream header1");
-            gst_buffer_unmap(header1, &map);
-            return MEDIA_PACKET_ERROR_INVALID_PARAMETER;
-        }
-        gst_buffer_unmap(header1, &map);
-
-        /* hsize2 : Comment Header (packet type 3) - variable byte */
-        header2 = gst_buffer_new_and_alloc(hsize2);
-        gst_buffer_fill(header2, 0,  (buf_data + (hsize1)), hsize2);
-        gst_buffer_map(header2, &map, GST_MAP_READ);
-        tmp_buf = map.data;
-        /* '0x03' + 'vorbis' */
-        if (*tmp_buf != 0x03) {
-            LOGE("[ERROR] Invalid Caps of Stream header2");
-            gst_buffer_unmap(header2, &map);
-            return MEDIA_PACKET_ERROR_INVALID_PARAMETER;
-        }
-        gst_buffer_unmap(header2, &map);
-
-        /* hsize3 : Setup Header (packet type 5) - variable byte */
-        hsize3 = streamheader_size - (hsize1 + hsize2);
-        header3 = gst_buffer_new_and_alloc(hsize3);
-        gst_buffer_fill(header3, 0,  (buf_data + (hsize1 + hsize2)), hsize3);
-        gst_buffer_map(header3, &map, GST_MAP_READ);
-        tmp_buf = map.data;
-        /* '0x05' + 'vorbis' */
-        if (*tmp_buf != 0x05) {
-            LOGE("[ERROR] Invalid Caps of Stream header3");
-            gst_buffer_unmap(header3, &map);
-            return MEDIA_PACKET_ERROR_INVALID_PARAMETER;
-        }
-        gst_buffer_unmap(header3, &map);
-
-        LOGD("[vorbis] streamheader hsize1 (%d) + hsize2 (%d) + hsize3 (%d) = Total (%d)",
-            hsize1, hsize2, hsize3, (hsize1 + hsize2 + hsize3));
-
-        __mc_gst_caps_set_buffer_array(*caps, "streamheader", header1, header2, header3, NULL);
-
-        gst_buffer_unref(header1);
-        gst_buffer_unref(header2);
-        gst_buffer_unref(header3);
-    } else if (core->codec_id == MEDIACODEC_FLAC) {
-        /*
-          * hsize1 : Stream Info (type 0) - fixed 51 byte
-          * hsize2 : Stream Comment (type 4) - variable byte (need calculate)
-        */
-
-        /* First of all, Need to fins and calculate size of hsize2 */
-        tmp_header = gst_buffer_new_and_alloc(streamheader_size);
-        gst_buffer_fill(tmp_header, 0, buf_data, streamheader_size);
-        gst_buffer_map(tmp_header, &map, GST_MAP_READ);
-        tmp_buf = map.data;
-        hsize2 = 4 + ((tmp_buf[52] << 16) | (tmp_buf[53] << 8) | (tmp_buf[54]));
-        LOGD("Find streamheader hsize2(%d)", hsize2);
-        gst_buffer_unmap(tmp_header, &map);
-        gst_buffer_unref(tmp_header);
-
-        /*  hsize1 :  Stream Info (type 0) - fixed 51 byte */
-        hsize1 = 51;
-        header1 = gst_buffer_new_and_alloc(hsize1);
-        gst_buffer_fill(header1, 0, buf_data, hsize1);
-        gst_buffer_map(header1, &map, GST_MAP_READ);
-        tmp_buf = map.data;
-        /* '0x7f' + 'FLAC' */
-        if (*tmp_buf != 0x07f) {
-            LOGE("[ERROR] Invalid Caps of Stream header1 (Info)");
-            gst_buffer_unmap(header1, &map);
-            gst_buffer_unref(header1);
-            return MEDIA_PACKET_ERROR_INVALID_PARAMETER;
-        }
-        gst_buffer_unmap(header1, &map);
-
-        /* hsize2 : Stream Comment (type 4) - variable byte (need calculate) */
-        header2 = gst_buffer_new_and_alloc(hsize2);
-        gst_buffer_fill(header2, 0, (buf_data + (hsize1)), hsize2);
-        gst_buffer_map(header2, &map, GST_MAP_READ);
-        tmp_buf = map.data;
-        /* '0x84' */
-        if (*tmp_buf != 0x84) {
-            LOGE("[ERROR] Invalid Caps of Stream header2 (Comment)");
-            gst_buffer_unmap(header2, &map);
-            gst_buffer_unref(header1);
-            gst_buffer_unref(header2);
-            return MEDIA_PACKET_ERROR_INVALID_PARAMETER;
-        }
-        gst_buffer_unmap(header2, &map);
-
-        LOGD("[flac] streamheader hsize1 (%d) + hsize2 (%d)  = Total (%d)", hsize1, hsize2, (hsize1 + hsize2));
-        __mc_gst_caps_set_buffer_array(*caps, "streamheader", header1, header2, NULL);
-        gst_buffer_unref(header1);
-        gst_buffer_unref(header2);
-    } else {
-        LOGE("Not support case of Stream header Caps");
-    }
-
-    /* Update gstbuffer's data ptr and size for using previous streamheader.*/
-    LOGD("BEFORE : buff->buffer of size %" G_GSIZE_FORMAT "", gst_buffer_get_size(buff->buffer));
-    gst_buffer_remove_memory_range(buff->buffer, streamheader_size, -1);
-    gst_buffer_set_size(buff->buffer, buf_size - streamheader_size);
-    LOGD("AFTER  : buff->buffer of size %" G_GSIZE_FORMAT "",  gst_buffer_get_size(buff->buffer));
-
-    return ret;
-}
-
-
-
-int __mc_set_caps_codecdata(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, guint codecdata_size)
-{
-    int ret = MEDIA_PACKET_ERROR_NONE;
-    void *buf_data = NULL;
-    uint64_t buf_size = 0;
-    GstBuffer *codecdata_buffer;
-
-    ret = media_packet_get_buffer_size(buff->pkt, &buf_size);
-    if (ret != MEDIA_PACKET_ERROR_NONE) {
-        LOGW("buffer size get fail");
-        return ret;
-    }
-
-    ret = media_packet_get_buffer_data_ptr(buff->pkt, &buf_data);
-    if (ret != MEDIA_PACKET_ERROR_NONE) {
-        LOGW("buffer size get fail");
-        return ret;
-    }
-
-    LOGD("Set caps for codec_data in mime : %s and codec_id (0x%x)", core->mime, core->codec_id);
-
-    /* Add the codec_data attribute to caps, if we have it */
-    codecdata_buffer = gst_buffer_new();
-    gst_buffer_copy_into(codecdata_buffer, buff->buffer, GST_BUFFER_COPY_MEMORY,0, codecdata_size);
-    gst_buffer_ref(codecdata_buffer);
-    LOGD("setting codec_data from (packet) buf_data used codecdata_size (%d)", codecdata_size);
-
-    gst_caps_set_simple(*caps, "codec_data", GST_TYPE_BUFFER, codecdata_buffer, NULL);
-    gst_buffer_unref(codecdata_buffer);
-
-    /* Update gstbuffer's data ptr and size for using previous codec_data..*/
-    LOGD("BEFORE : buff->buffer of size %" G_GSIZE_FORMAT "",  gst_buffer_get_size(buff->buffer));
-
-    gst_buffer_replace_memory(buff->buffer, 0,
-        gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, buf_data + codecdata_size , buf_size - codecdata_size, 0,
-        buf_size - codecdata_size, buff, (GDestroyNotify)gst_mediacodec_buffer_finalize));
-
-    LOGD("AFTER  : buff->buffer of size %" G_GSIZE_FORMAT "",  gst_buffer_get_size(buff->buffer));
-
-    return ret;
-}
-
 
 int _mc_output_media_packet_new(mc_gst_core_t *core, bool video, bool encoder, media_format_mimetype_e out_mime)
 {
@@ -1339,7 +512,8 @@ int _mc_output_media_packet_new(mc_gst_core_t *core, bool video, bool encoder, m
         info = (mc_encoder_info_t *)core->codec_info;
 
         if (video) {
-            media_format_set_video_mime(core->output_fmt, out_mime);
+             // Bypass for Not Support of MEDIACODEC_VP8/VP9 in capi-media-tool
+            media_format_set_video_mime(core->output_fmt, core->codec_id==MEDIACODEC_VP8 ? MEDIA_FORMAT_MJPEG : out_mime);
             media_format_set_video_width(core->output_fmt, info->width);
             media_format_set_video_height(core->output_fmt, info->height);
             media_format_set_video_avg_bps(core->output_fmt, info->bitrate);
@@ -1544,7 +718,9 @@ static gpointer feed_task(gpointer data)
             goto ERROR;
         }
 
-        if (codec_config)
+        if(!core->encoder)
+            initiative = false;
+        else if (codec_config)
             initiative = true;
 
         if (initiative) {
@@ -1574,7 +750,6 @@ static gpointer feed_task(gpointer data)
             _mc_wait_for_eos(core);
             initiative = true;
         }
-
 
         continue;
 ERROR:
@@ -1627,111 +802,75 @@ static void __mc_gst_start_feed(GstElement *pipeline, guint size, gpointer data)
     }
 }
 
+int __mc_video_enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    char* format = "I420";
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
+    if(core->is_hw)
+    {
+        format = "SN12";
+        g_object_set(GST_OBJECT(core->codec), "target-bitrate", enc_info->bitrate*1000, NULL);
+//        if(core->codec_id == MEDIACODEC_H264)
+//            g_object_set(GST_OBJECT(core->codec), "byte-stream", TRUE, NULL);
+        *caps = gst_caps_new_simple(core->mime,
+            "width", G_TYPE_INT, enc_info->width,
+            "height", G_TYPE_INT, enc_info->height,
+            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
+            NULL);
+    }
+    else
+    {
+        *caps = gst_caps_new_simple(core->mime,
+            "format", G_TYPE_STRING, format,
+            "width", G_TYPE_INT, enc_info->width,
+            "height", G_TYPE_INT, enc_info->height,
+            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
+            NULL);
+    }
+    LOGD("%d, %d, %d", enc_info->width, enc_info->height, enc_info->fps);
+    return MC_ERROR_NONE;
+}
+
+int __mc_audio_enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    char* format = NULL;
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
+    if(core->codec_id ==  MEDIACODEC_AMR_NB)
+        format = "S16LE";
+    else if(core->codec_id == MEDIACODEC_AAC_LC ||core->codec_id ==  MEDIACODEC_AAC_HE ||core->codec_id ==  MEDIACODEC_AAC_HE_PS)
+    {
+        g_object_set(GST_OBJECT(core->codec), "compliance", -2, NULL);
+        format = "F32LE";
+    }
+    else return MC_NOT_SUPPORTED;
+    *caps = gst_caps_new_simple(core->mime,
+            "rate", G_TYPE_INT, enc_info->samplerate,
+            "channels", G_TYPE_INT, enc_info->channel,
+            "format", G_TYPE_STRING, format,
+            "layout", G_TYPE_STRING, "interleaved", NULL);
+    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, enc_info->samplerate, enc_info->channel);
+    return MC_ERROR_NONE;
+}
+
 static int _mc_link_vtable(mc_gst_core_t *core, mediacodec_codec_type_e id, gboolean encoder, gboolean is_hw)
 {
     MEDIACODEC_FENTER();
 
     g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
-    switch (id) {
-        case MEDIACODEC_AAC:
-        {
-            /* if set to 'CODEC_CONFIG', then It is also available case of  MEDIA_FORMAT_AAC_LC (RAW) */
-            LOGD("aac lc (adts) vtable");
-            core->vtable = encoder ? aenc_aac_vtable : adec_aac_vtable;
-            break;
-        }
-        case MEDIACODEC_AAC_HE:
-        case MEDIACODEC_AAC_HE_PS:
-        {
-            LOGD("aac he v12 vtable");
-            core->vtable = encoder ? aenc_aac_vtable : adec_aacv12_vtable;
-            if (encoder) {
-                LOGD("[MC_NOT_SUPPORTED] he-aac-v12 encoder is not supported yet!!!");
-                return MC_NOT_SUPPORTED;
-            }
-            break;
-        }
-        case MEDIACODEC_MP3:
-        {
-            LOGD("mp3 vtable - Only support decoder");
-            core->vtable = encoder ? aenc_vtable : adec_mp3_vtable;
-            if (encoder) {
-                LOGD("[MC_NOT_SUPPORTED] mp3 encoder is not supported yet!!!");
-                return MC_NOT_SUPPORTED;
-            }
-            break;
-        }
-        case MEDIACODEC_AMR_NB:
-        {
-            LOGD("amrnb vtable");
-            core->vtable = encoder ? aenc_amrnb_vtable : adec_amrnb_vtable;
-            break;
-        }
-        case MEDIACODEC_AMR_WB:
-        {
-            LOGD("amrwb vtable - Only support decoder");
-            core->vtable = encoder ? aenc_vtable : adec_amrwb_vtable;
-            if (encoder) {
-                LOGD("[MC_NOT_SUPPORTED] amr-wb encoder is not supported yet!!!");
-                return MC_NOT_SUPPORTED;
-            }
-            break;
-        }
-        case MEDIACODEC_VORBIS:
-        {
-            LOGD("vorbis vtable");
-            core->vtable = encoder ? aenc_vtable : adec_vorbis_vtable;
-            if (encoder) {
-                LOGD("[MC_NOT_SUPPORTED] vorbis encoder is not supported yet!!!");
-                return MC_NOT_SUPPORTED;
-            }
-            break;
-        }
-        case MEDIACODEC_FLAC:
-        {
-            LOGD("flac vtable");
-            core->vtable = encoder ? aenc_vtable : adec_flac_vtable;
-            if (encoder) {
-                LOGD("[MC_NOT_SUPPORTED] flac encoder is not supported yet!!!");
-                return MC_NOT_SUPPORTED;
-            }
-            break;
-        }
-        case MEDIACODEC_WMAV1:
-        case MEDIACODEC_WMAV2:
-        case MEDIACODEC_WMAPRO:
-        case MEDIACODEC_WMALSL:
-        {
-            LOGD("wma(V1 / V2 / LSL / PRO) vtable");
-            core->vtable = encoder ? aenc_vtable : adec_wma_vtable;
-            if (encoder) {
-                LOGD("[MC_NOT_SUPPORTED] wma encoder is not supported yet!!!");
-                return MC_NOT_SUPPORTED;
-            }
-            break;
-        }
-        case MEDIACODEC_H263:
-        {
-            LOGD("h263 vtable");
-            core->vtable = encoder ? (is_hw ? venc_h263_hw_vtable : venc_h263_sw_vtable) : is_hw ? vdec_h263_hw_vtable : vdec_h263_sw_vtable;
-            break;
-        }
-        case MEDIACODEC_MPEG4:
-        {
-            LOGD("mpeg4 vtable");
-            core->vtable = encoder ? (is_hw ? venc_mpeg4_hw_vtable : venc_mpeg4_sw_vtable) : is_hw ? vdec_mpeg4_hw_vtable : vdec_mpeg4_sw_vtable;
-
-            break;
-        }
-        case MEDIACODEC_H264:
-        {
-            LOGD("h264 vtable");
-            core->vtable = encoder ? (is_hw ? venc_h264_hw_vtable : venc_vtable) : is_hw ? vdec_h264_hw_vtable : vdec_h264_sw_vtable;
-            break;
-        }
-        default:
-            break;
+    if(encoder && core->video)
+    {
+        core->vtable[fill_inbuf] = is_hw ? __mc_fill_inbuf_with_mm_video_buffer : __mc_fill_inbuf_with_venc_packet;
+        core->vtable[fill_outbuf] = __mc_fill_venc_packet_with_outbuf;
+        core->vtable[create_caps] = __mc_video_enc_caps;
+    }
+    else
+    {
+        core->vtable[fill_inbuf] = __mc_fill_inbuf_with_packet;
+        core->vtable[fill_outbuf] = !core->video ? __mc_fill_packet_with_outbuf : is_hw ? __mc_fill_video_packet_with_mm_video_buffer : __mc_fill_vdec_packet_with_outbuf;
+        core->vtable[create_caps] = (encoder && !core->video) ? __mc_audio_enc_caps : NULL;
     }
 
     return MC_ERROR_NONE;
@@ -2093,9 +1232,109 @@ ERROR:
     return FALSE;
 }
 
+/* Some codecs needs special caps matching between parser and codec */
+static int __mc_set_codec_inout_caps(mc_gst_core_t *core)
+{
+    GstCaps *caps = NULL;
+    if (core->video)
+    {
+        if (core->codec_id == MEDIACODEC_MPEG4 && !core->encoder && core->is_hw)
+        {
+            mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+            caps = gst_caps_new_simple(core->mime,
+                    "mpegversion", G_TYPE_INT, 4,
+                    "width", G_TYPE_INT, dec_info->width,
+                    "height", G_TYPE_INT, dec_info->height,
+                    "framerate", GST_TYPE_FRACTION, 30, 1,
+                    NULL);
+        }
+#if 1
+        else if (core->codec_id == MEDIACODEC_VP8 && !core->encoder && !core->is_hw)
+        {
+            mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
+            caps = gst_caps_new_simple("video/x-vp8",
+                    "width", G_TYPE_INT, dec_info->width,
+                    "height", G_TYPE_INT, dec_info->height,
+                    "framerate", GST_TYPE_FRACTION, 30, 1,
+                    NULL);
+        }
+#endif
+    }
+    else
+    {
+        if (core->codec_id == MEDIACODEC_MP3)
+        {
+            if (core->encoder)
+            {
+                caps = gst_caps_new_simple("audio/mpeg", "stream-format", G_TYPE_STRING, core->output_fmt,NULL);
+                LOGW("Setting aenc out format");
+            }
+            else
+            {
+                caps = gst_caps_new_simple(core->mime, "layer", G_TYPE_INT, 3 , NULL);
+                LOGW("Setting adec in format");
+            }
+        }
+    }
+
+    if(caps != NULL)
+    {
+        g_object_set(GST_OBJECT(core->capsfilter), "caps", caps, NULL);
+        gst_caps_unref(caps);
+        return 0;
+    }
+    return 1;
+}
+
+static char * _mc_get_parser_name_from_codecid(mediacodec_codec_type_e codec_id)
+{
+    switch(codec_id) {
+        case MEDIACODEC_H264:
+            return "h264parse";
+
+        case MEDIACODEC_MPEG4:
+            return "mpeg4videoparse";
+
+        case MEDIACODEC_H263:
+            return "h263parse";
+
+        //case MEDIACODEC_AAC:
+        case MEDIACODEC_AAC_LC:
+        case MEDIACODEC_AAC_HE:
+        case MEDIACODEC_AAC_HE_PS:
+            return "aacparse";
+
+        case MEDIACODEC_MP3:
+            return "mpegaudioparse";
+
+        //case MEDIACODEC_AMR:
+        case MEDIACODEC_AMR_NB:
+        case MEDIACODEC_AMR_WB:
+            return "amrparse";
+
+        case MEDIACODEC_VORBIS:
+            return "vorbisparse";
+
+        case MEDIACODEC_FLAC:
+            return "flacparse";
+
+        case MEDIACODEC_MPEG2:
+            return "mpegvideoparse";
+
+        case MEDIACODEC_VC1:
+            return "vc1parse";
+
+        default:
+            return NULL;
+    }
+}
+
 mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t *core, gchar *factory_name)
 {
     GstBus *bus = NULL;
+    GstElement* elem[4];
+    int off=0;
+    char* parser_name = NULL;
 
     MEDIACODEC_FENTER();
 
@@ -2147,15 +1386,46 @@ mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t *core, gchar *factory_name)
         }
         g_object_set(core->fakesink, "enable-last-sample", FALSE, NULL);
 
-        /*__mc_link_elements(core);*/
-        gst_bin_add_many(GST_BIN(core->pipeline), core->appsrc, core->capsfilter, core->codec, core->fakesink, NULL);
-
-        /* link elements */
-        if (!(gst_element_link_many(core->appsrc, core->capsfilter, core->codec, core->fakesink, NULL)))
+        for(off=0 ; off<sizeof(elem)/sizeof(elem[0]) ; ++off)
+            elem[off] = NULL;
+        off = 0;
+        if(!core->encoder)
+            parser_name = _mc_get_parser_name_from_codecid(core->codec_id);
+        if(parser_name != NULL)
         {
-            LOGE("gst_element_link_many is failed");
-            goto ERROR;
+            // Selectively add caps
+            if(!__mc_set_codec_inout_caps(core))
+                 elem[off++] = core->capsfilter;
+            else
+            {
+                gst_object_unref(GST_OBJECT(core->capsfilter));
+                core->capsfilter = NULL;
+            }
+            // Add parser
+            LOGD("parser is %s",parser_name);
+            core->parser = gst_element_factory_make(parser_name, NULL);
+            if (!core->parser) {
+                       LOGE("parser create fail");
+                    goto ERROR;
+            }
+            elem[off++] = core->parser;
         }
+        else
+        {
+            // always add caps
+            __mc_set_codec_inout_caps(core);
+            elem[off++] = core->capsfilter;
+        }
+        elem[off++] = core->codec;
+        elem[off++] = core->fakesink;
+        gst_bin_add_many(GST_BIN(core->pipeline), core->appsrc, elem[0], elem[1], elem[2], elem[3], elem[4], NULL);
+        if (!gst_element_link_many(core->appsrc, elem[0], elem[1], elem[2], elem[3], elem[4], NULL))
+        {
+            g_print("Elements Linking Failed with parser = %d\n", !core->encoder);
+            GST_WARNING ("Can't link elements");
+            return -1;
+        }
+        g_print("Elements Linking OK with parser = %d\n", !core->encoder);
 
         /* connect signals, bus watcher */
         bus = gst_pipeline_get_bus(GST_PIPELINE(core->pipeline));
@@ -2199,6 +1469,9 @@ ERROR:
 
     if (core->capsfilter)
         gst_object_unref(GST_OBJECT(core->capsfilter));
+
+    if (core->parser)
+        gst_object_unref(GST_OBJECT(core->parser));
 
     if (core->fakesink)
         gst_object_unref(GST_OBJECT(core->fakesink));
@@ -3220,3 +2493,4 @@ void _mc_wait_for_eos(mc_gst_core_t *core)
     LOGD("received EOS");
     g_mutex_unlock(&core->eos_mutex);
 }
+                              

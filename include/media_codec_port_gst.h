@@ -88,7 +88,7 @@ struct _mc_gst_port_t
 
 struct _mc_gst_core_t
 {
-    int(**vtable)();
+    int(*vtable[3])();
     const char *mime;
     //int format;
     gchar *format;
