@@ -185,22 +185,6 @@ int mc_set_vdec_info(MMHandleType mediacodec, int width, int height)
 
     mc_handle->is_prepared = true;
 
-    switch (mc_handle->codec_id) {
-        case MEDIACODEC_H264:
-            mc_sniff_bitstream = mc_sniff_h264_bitstream;
-            LOGD("mc_sniff_h264_bitstream");
-            break;
-        case MEDIACODEC_MPEG4:
-            mc_sniff_bitstream = mc_sniff_mpeg4_bitstream;
-            break;
-        case MEDIACODEC_H263:
-            mc_sniff_bitstream = mc_sniff_h263_bitstream;
-            break;
-        default:
-            LOGE("NOT SUPPORTED!!!!");
-            break;
-    }
-
     return ret;
 }
 
@@ -225,7 +209,6 @@ int mc_set_venc_info(MMHandleType mediacodec, int width, int height, int fps, in
     mc_handle->info.encoder.fps = fps;
     mc_handle->info.encoder.bitrate = target_bits;
     mc_handle->is_prepared = true;
-    mc_sniff_bitstream = mc_sniff_yuv;
 
     return ret;
 }
@@ -362,12 +345,6 @@ int mc_process_input(MMHandleType mediacodec, media_packet_h inbuf, uint64_t tim
     if (!mc_handle) {
         LOGE("fail invaild param");
         return MC_INVALID_ARG;
-    }
-
-    if (mc_handle->is_video) {
-        if ((ret = mc_sniff_bitstream(mc_handle, inbuf)) != MC_ERROR_NONE) {
-            return MC_INVALID_IN_BUF;
-        }
     }
 
     switch (mc_handle->port_type) {
@@ -764,122 +741,6 @@ int _mediacodec_foreach_supported_codec(MMHandleType mediacodec, mediacodec_supp
 
 CALLBACK_ERROR:
     LOGD("foreach callback returned error");
-    return ret;
-}
-
-int mc_sniff_h264_bitstream(mc_handle_t *handle, media_packet_h pkt)
-{
-    int ret = MC_ERROR_NONE;
-    void *buf_data = NULL;
-    void *codec_data = NULL;
-    unsigned int codec_data_size = 0;
-    uint64_t buf_size = 0;
-    bool eos = false;
-    bool codec_config = false;
-
-    media_packet_get_buffer_size(pkt, &buf_size);
-    media_packet_get_buffer_data_ptr(pkt, &buf_data);
-    media_packet_get_codec_data(pkt, &codec_data, &codec_data_size);
-    media_packet_is_end_of_stream(pkt, &eos);
-    media_packet_is_codec_config(pkt, &codec_config);
-
-    LOGD("codec_data_size : %d, buf_size : %d, codec_config : %d, eos : %d",
-        codec_data_size, (int)buf_size, codec_config, eos);
-
-    if (codec_config) {
-        if (codec_data_size == 0)
-          ret = _mc_check_h264_bytestream(buf_data, (int)buf_size, 0, NULL, NULL, NULL);
-    }
-
-    return ret;
-}
-
-int mc_sniff_mpeg4_bitstream(mc_handle_t *handle, media_packet_h pkt)
-{
-    uint64_t buf_size = 0;
-    unsigned char *buf_data = NULL;
-    void *codec_data = NULL;
-    int codec_data_size = 0, voss_size = 0;
-    bool eos = false;
-    bool codec_config = false;
-    bool sync_frame = false;
-
-    media_packet_get_buffer_size(pkt, &buf_size);
-    media_packet_get_buffer_data_ptr(pkt, (void *)&buf_data);
-    media_packet_get_codec_data(pkt, &codec_data, &codec_data_size);
-    media_packet_is_end_of_stream(pkt, &eos);
-    media_packet_is_codec_config(pkt, &codec_config);
-    media_packet_is_sync_frame(pkt, &sync_frame);
-
-    LOGD("codec_data_size : %d, buff_size : %d, codec_config : %d, sync_frame : %d, eos : %d",
-        codec_data_size, (int)buf_size, codec_config, sync_frame, eos);
-
-    if (eos)
-        return MC_ERROR_NONE;
-
-    if (codec_config) {
-        if (codec_data) {
-            if (!_mc_is_voss(codec_data, codec_data_size, NULL))/*voss not in codec data */
-                return MC_INVALID_IN_BUF;
-        }
-        /* Codec data + I-frame in buffer */
-        if (_mc_is_voss(buf_data, buf_size, &voss_size)) {
-            if (_mc_is_ivop(buf_data, buf_size, voss_size))   /* IVOP after codec_data */
-                return MC_ERROR_NONE;
-        } else {
-            if (_mc_is_ivop(buf_data, buf_size, 0))            /* IVOP at the start */
-                return MC_ERROR_NONE;
-        }
-    } else if (_mc_is_vop(buf_data, buf_size, 0))
-        return MC_ERROR_NONE;
-
-    return MC_INVALID_IN_BUF;
-}
-
-int mc_sniff_h263_bitstream(mc_handle_t *handle, media_packet_h pkt)
-{
-    void *buf_data = NULL;
-    uint64_t buf_size = 0;
-    bool eos = false;
-
-    media_packet_get_buffer_size(pkt, &buf_size);
-    media_packet_get_buffer_data_ptr(pkt, &buf_data);
-    media_packet_is_end_of_stream(pkt, &eos);
-
-    if (eos)
-        return MC_ERROR_NONE;
-
-    return _mc_check_valid_h263_frame((unsigned char *)buf_data, (int)buf_size);
-}
-
-int mc_sniff_yuv(mc_handle_t *handle, media_packet_h pkt)
-{
-    int ret = MC_ERROR_NONE;
-
-#if 0 /* libtbm, media-tool should be updated */
-    uint64_t buf_size = 0;
-    int plane_num = 0;
-    int padded_width = 0;
-    int padded_height = 0;
-    int allocated_buffer = 0;
-    int index;
-
-    media_packet_get_buffer_size(pkt, &buf_size);
-    media_packet_get_video_number_of_planes(pkt, &plane_num);
-
-    for (index = 0; index < plane_num; index++) {
-        media_packet_get_video_stride_width(pkt, index, &padded_width);
-        media_packet_get_video_stride_height(pkt, index, &padded_height);
-        allocated_buffer += padded_width * padded_height;
-
-        LOGD("%d plane size : %d", padded_width * padded_height);
-    }
-
-    if (buf_size > allocated_buffer) {
-        LOGE("Buffer exceeds maximum size [buf_size: %d, allocated_size :%d", (int)buf_size, allocated_buffer);
-        ret = MC_INVALID_IN_BUF;
-    }
-#endif
     return ret;
 }
 

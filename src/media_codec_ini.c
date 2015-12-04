@@ -271,11 +271,17 @@ media_format_mimetype_e _mc_convert_media_format_str_to_int(char *sformat )
     } else if (!strcmp(sformat,"H264_HP")) {
         iformat = MEDIA_FORMAT_H264_HP;
         goto endf;
+    } else if (!strcmp(sformat,"MPEG2_SP")) {
+        iformat = MEDIA_FORMAT_MPEG2_SP;
+        goto endf;
     } else if (!strcmp(sformat,"MPEG4_SP")) {
         iformat = MEDIA_FORMAT_MPEG4_SP;
         goto endf;
     } else if (!strcmp(sformat,"MPEG4_ASP")) {
         iformat = MEDIA_FORMAT_MPEG4_ASP;
+        goto endf;
+    } else if (!strcmp(sformat,"MJPEG")) {
+        iformat = MEDIA_FORMAT_MJPEG;
         goto endf;
     } else if (!strcmp(sformat,"AMR_NB")) {
         iformat = MEDIA_FORMAT_AMR_NB;
@@ -309,6 +315,9 @@ media_format_mimetype_e _mc_convert_media_format_str_to_int(char *sformat )
         goto endf;
     } else if (!strcmp(sformat,"WMAPRO")) {
         iformat = MEDIA_FORMAT_WMAPRO;
+        goto endf;
+    } else if (!strcmp(sformat,"VP8")) {
+        iformat = MEDIA_FORMAT_VP8;
         goto endf;
     }
 
