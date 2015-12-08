@@ -215,6 +215,99 @@ typedef bool (*mediacodec_supported_codec_cb)(mediacodec_codec_type_e codec_type
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
+ @code
+#include <glib.h>
+#include <media_codec.h>
+#include <media_packet.h>
+
+typedef struct _App App;
+
+struct _App
+{
+  GMainLoop *loop;
+  guint sourceid;
+
+  mediacodec_h mediacodec;
+  media_format_h vdec_fmt;
+  guint width;
+  guint height;
+};
+
+static gboolean read_data(App *app)
+{
+  media_packet_h pkt;
+  void *buf_data_ptr;
+  int read;
+  int pts;
+
+  media_packet_create_alloc(app->vdec_fmt, NULL, NULL, &pkt);
+
+  media_packet_get_buffer_data_ptr(pkt, &buf_data_ptr);
+
+  ...
+  //need to fill out data
+  memcpy(buf_data_ptr, tmp, read);
+  media_packet_set_buffer_size(pkt, (uint64_t)read);
+  media_packet_set_pts(pkt, (uint64_t)(pts));
+
+  mediacodec_process_input(app->mediacodec, pkt, 0);
+
+  return TRUE;
+}
+
+static bool _mediacodec_buffer_status_cb(mediacodec_status_e status, void *user_data)
+{
+  App *app = (App*)user_data;
+
+  if (status == MEDIACODEC_NEED_DATA)
+    app->sourceid = g_idle_add((GSourceFunc)read_data, app);
+  else if (status == MEDIACODEC_ENOUGH_DATA ){
+    g_source_remove(app->sourceid);
+    app->sourceid = 0;
+  }
+  return TRUE;
+}
+
+static bool _mediacodec_inbuf_used_cb(media_packet_h pkt, void *user_data)
+{
+  media_packet_destroy(pkt);
+  return TRUE;
+}
+
+static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
+{
+    media_packet_h out_pkt;
+
+    mediacodec_get_output(app->mediacodec, &out_pkt, 0);
+}
+
+
+mediacodec_create(&app->mediacodec);
+mediacodec_set_codec(app->mediacodec, MEDIACODEC_H264, MEDIACODEC_DECODER | MEDIACODEC_SUPPORT_TYPE_HW);
+mediacodec_set_vdec_info(app->mediacodec, app->width, app->height);
+
+
+// set callback
+mediacodec_set_input_buffer_used_cb(app->mediacodec, _mediacodec_inbuf_used_cb, NULL);
+mediacodec_set_output_buffer_available_cb(app->mediacodec, _mediacodec_outbuf_available_cb, app);
+mediacodec_set_buffer_status_cb(app->mediacodec, _mediacodec_buffer_status_cb, app);
+mediacodec_set_eos_cb(app->mediacodec,_mediacodec_eos_cb, NULL);
+mediacodec_set_error_cb(app->mediacodec, _mediacodec_error_cb, NULL);
+
+// create video format
+media_format_create(&app->vdec_fmt);
+media_format_set_video_mime(app->vdec_fmt, MEDIA_FORMAT_NV12);
+media_format_set_video_width(app->vdec_fmt, app->width);
+media_format_set_video_height(app->vdec_fmt, app->height);
+
+
+// prepare
+mediacodec_prepare(app->mediacodec);
+
+app->loop = g_main_loop_new(NULL, TRUE);
+g_main_loop_run(app->loop);
+
+@endcode
  */
 int mediacodec_create(mediacodec_h *mediacodec);
 
@@ -230,12 +323,6 @@ int mediacodec_create(mediacodec_h *mediacodec);
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
-
- mediacodec_create(&mediacodec);
- @endcode
  */
 int mediacodec_destroy(mediacodec_h mediacodec);
 
@@ -243,27 +330,20 @@ int mediacodec_destroy(mediacodec_h mediacodec);
  * @brief Sets the codec type and decoder/encoder.
  * @since_tizen 2.3
  * @remarks If this codec is to be used as a decoder, pass the #MEDIACODEC_DECODER flag.
- *          If this codec is to be used as an encoder, pass the #MEDIACODEC_ENCODER flag.
- *          By default, It is used software default setting. If user want software setting, pass the
- *          #MEDIACODEC_SUPPORT_TYPE_SW flags.
+ *          If this codec is to be used as an encoder, pass the #MEDIACODEC_ENCODER flag.\n
+ *          The software codec is used as default setting(#MEDIACODEC_SUPPORT_TYPE_SW) if user doesn't set hardware flag.
+ *          If user wants to use h/w decoder, user needs to pass the #MEDIACODEC_DECODER | #MEDIACODEC_SUPPORT_TYPE_HW.
  * @param[in] mediacodec  The handle of mediacodec
  * @param[in] codec_type  The identifier of the codec type of the decoder/encoder
- * @param[in] flags  The encoding/decoding scheme.
+ * @param[in] flags  The encoding/decoding scheme, defined by #mediacodec_support_type_e
  * @return @c 0 on success, otherwise a negative error value
  * @retval #MEDIACODEC_ERROR_NONE Successful
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
  * @retval #MEDIACODEC_ERROR_CODEC_NOT_FOUND Codec not found
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
-
- mediacodec_create(&mediacodec);
- mediacodec_destroy(mediacodec);
- @endcode
  */
-int mediacodec_set_codec(mediacodec_h mediacodec, mediacodec_codec_type_e codec_type, mediacodec_support_type_e flags);
+int mediacodec_set_codec(mediacodec_h mediacodec, mediacodec_codec_type_e codec_type, int flags);
 
 /**
  * @brief Sets the default info for the video decoder
@@ -276,13 +356,6 @@ int mediacodec_set_codec(mediacodec_h mediacodec, mediacodec_codec_type_e codec_
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
-
- mediacodec_create(&mediacodec);
- mediacodec_set_codec(mediacodec, MEDIACODEC_H264, MEDIACODEC_DECODER | MEDIACODEC_SUPPORT_TYPE_HW);
- @endcode
  */
 int mediacodec_set_vdec_info(mediacodec_h mediacodec, int width, int height);
 
@@ -301,14 +374,6 @@ int mediacodec_set_vdec_info(mediacodec_h mediacodec, int width, int height);
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
-
- mediacodec_create(&mediacodec);
- mediacodec_set_codec(mediacodec, MEDIACODEC_H264, MEDIACODEC_ENCODER | MEDIACODEC_SUPPORT_TYPE_HW);
- mediacodec_set_venc_info(mediacodec, 640, 480, 30, 1000);
- @endcode
  */
 int mediacodec_set_venc_info(mediacodec_h mediacodec, int width, int height, int fps, int target_bits);
 
@@ -324,14 +389,6 @@ int mediacodec_set_venc_info(mediacodec_h mediacodec, int width, int height, int
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
-
- mediacodec_create(&mediacodec);
- mediacodec_set_codec(mediacodec, MEDIACODEC_AAC, MEDIACODEC_DECODER | MEDIACODEC_SUPPORT_TYPE_SW);
- mediacodec_set_adec_info(mediacodec, 44100, 2, 16);
- @endcode
  */
 int mediacodec_set_adec_info(mediacodec_h mediacodec, int samplerate, int channel, int bit);
 
@@ -348,14 +405,6 @@ int mediacodec_set_adec_info(mediacodec_h mediacodec, int samplerate, int channe
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
-
- mediacodec_create(&mediacodec);
- mediacodec_set_codec(mediacodec, MEDIACODEC_AAC, MEDIACODEC_ENCODER | MEDIACODEC_SUPPORT_TYPE_SW);
- mediacodec_set_aenc_info(mediacodec, 44100, 2, 16, 128);
- @endcode
  */
 int mediacodec_set_aenc_info(mediacodec_h mediacodec, int samplerate, int channel, int bit, int bitrate);
 
@@ -371,14 +420,6 @@ int mediacodec_set_aenc_info(mediacodec_h mediacodec, int samplerate, int channe
  * @pre The mediacodec should call mediacodec_set_codec()and mediacodec_set_vdec_info()/mediacodec_set_venc_info() before calling mediacodec_prepare()
  *      If the decoder is set by mediacodec_set_codec(), mediacodec_set_vdec_info() should be called. If the encoder is set by
  *      mediacodec_set_codec(), mediacodec_set_venc_info() should be called.
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
-
- mediacodec_create(&mediacodec);
- mediacodec_set_codec(mediacodec, MEDIACODEC_H264, MEDIACODEC_DECODER | MEDIACODEC_SUPPORT_TYPE_HW);
- mediacodec_prepare(mediacodec);
- @endcode
  */
 int mediacodec_prepare(mediacodec_h mediacodec);
 
@@ -391,15 +432,6 @@ int mediacodec_prepare(mediacodec_h mediacodec);
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
-
- mediacodec_create(&mediacodec);
- mediacodec_set_codec(mediacodec, MEDIACODEC_H264, MEDIACODEC_DECODER | MEDIACODEC_SUPPORT_TYPE_HW);
- mediacodec_prepare(mediacodec);
- mediacodec_unprepare(mediacodec);
- @endcode
  */
 int mediacodec_unprepare(mediacodec_h mediacodec);
 
@@ -417,16 +449,6 @@ int mediacodec_unprepare(mediacodec_h mediacodec);
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
  * @retval #MEDIACODEC_ERROR_OVERFLOW_INBUFFER Overflow inputbuffer
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
- media_packet_h pkt;
-
- mediacodec_create(&mediacodec);
- mediacodec_set_codec(mediacodec, MEDIACODEC_H264, MEDIACODEC_DECODER | MEDIACODEC_SUPPORT_TYPE_HW);
- mediacodec_prepare(mediacodec);
- mediacodec_process_input(pkt);
- @endcode
  */
 int mediacodec_process_input (mediacodec_h mediacodec, media_packet_h inbuf, uint64_t timeOutUs);
 
@@ -443,18 +465,6 @@ int mediacodec_process_input (mediacodec_h mediacodec, media_packet_h inbuf, uin
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
- media_packet_h pkt;
- media_packet_h out_pkt;
-
- mediacodec_create(&mediacodec);
- mediacodec_set_codec(mediacodec, MEDIACODEC_H264, MEDIACODEC_DECODER | MEDIACODEC_SUPPORT_TYPE_HW);
- mediacodec_prepare(mediacodec);
- mediacodec_process_input(pkt);
- mediacodec_get_output(mediacodec, &out_pkt, 1000);
- @endcode
  */
 int mediacodec_get_output (mediacodec_h mediacodec, media_packet_h *outbuf, uint64_t timeOutUs);
 
@@ -465,18 +475,6 @@ int mediacodec_get_output (mediacodec_h mediacodec, media_packet_h *outbuf, uint
  * @return @c 0 on success, otherwise a negative error value
  * @retval #MEDIACODEC_ERROR_NONE Successful
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
- @code
- #include <media_codec.h>
- mediacodec_h mediacodec;
- media_packet_h pkt;
- media_packet_h out_pkt;
-
- mediacodec_create(&mediacodec);
- mediacodec_set_codec(mediacodec, MEDIACODEC_H264, MEDIACODEC_DECODER | MEDIACODEC_SUPPORT_TYPE_HW);
- mediacodec_prepare(mediacodec);
- mediacodec_process_input(pkt);
- mediacodec_flush_buffers(mediacodec);
- @endcode
  */
 int mediacodec_flush_buffers (mediacodec_h mediacodec);
 
