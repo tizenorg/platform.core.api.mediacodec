@@ -169,7 +169,7 @@ int mediacodec_destroy(mediacodec_h mediacodec)
     }
 }
 
-int mediacodec_set_codec(mediacodec_h mediacodec, mediacodec_codec_type_e codec_id, mediacodec_support_type_e flags)
+int mediacodec_set_codec(mediacodec_h mediacodec, mediacodec_codec_type_e codec_id, int flags)
 {
     MEDIACODEC_INSTANCE_CHECK(mediacodec);
     mediacodec_s *handle = (mediacodec_s *)mediacodec;
