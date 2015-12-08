@@ -227,7 +227,7 @@ extern "C" {
 int mc_create(MMHandleType *mediacodec);
 int mc_destroy(MMHandleType mediacodec);
 
-int mc_set_codec(MMHandleType mediacodec, mediacodec_codec_type_e codec_id, mediacodec_support_type_e flags);
+int mc_set_codec(MMHandleType mediacodec, mediacodec_codec_type_e codec_id, int flags);
 
 int mc_set_vdec_info(MMHandleType mediacodec, int width, int height);
 int mc_set_venc_info(MMHandleType mediacodec, int width, int height, int fps, int target_bits);

@@ -263,7 +263,7 @@ int mediacodec_destroy(mediacodec_h mediacodec);
  mediacodec_destroy(mediacodec);
  @endcode
  */
-int mediacodec_set_codec(mediacodec_h mediacodec, mediacodec_codec_type_e codec_type, mediacodec_support_type_e flags);
+int mediacodec_set_codec(mediacodec_h mediacodec, mediacodec_codec_type_e codec_type, int flags);
 
 /**
  * @brief Sets the default info for the video decoder

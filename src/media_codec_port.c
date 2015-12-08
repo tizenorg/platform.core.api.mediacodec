@@ -118,7 +118,7 @@ int mc_destroy(MMHandleType mediacodec)
     return ret;
 }
 
-int mc_set_codec(MMHandleType mediacodec, mediacodec_codec_type_e codec_id, mediacodec_support_type_e flags)
+int mc_set_codec(MMHandleType mediacodec, mediacodec_codec_type_e codec_id, int flags)
 {
     int ret = MC_ERROR_NONE;
     mc_handle_t *mc_handle = (mc_handle_t *) mediacodec;
