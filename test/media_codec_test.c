@@ -893,14 +893,14 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
     if (ret != MEDIACODEC_ERROR_NONE) {
         g_print("get_output failed\n");
     }
-    //decoder_output_dump(app, out_pkt);
+    decoder_output_dump(app, out_pkt);
 
 #if DUMP_OUTBUF
     void *data;
     uint64_t buf_size;
     int stride_width, stride_height;
 
-    media_packet_get_buffer_data_ptr(out_pkt, 0, &data);
+    media_packet_get_buffer_data_ptr(out_pkt, &data);
     media_packet_get_buffer_size(out_pkt, &buf_size);
     g_print("output data : %p, size %d\n",data, (int)buf_size);
 
@@ -950,7 +950,7 @@ static void _mediacodec_prepare(App *app)
     media_format_mimetype_e mime;
 
 #if DUMP_OUTBUF
-    fp_out = fopen("/opt/usr/codec_dump.out", "wb");
+    fp_out = fopen("/tmp/codec_dump.out", "wb");
 #endif
     /* create instance */
     ret = mediacodec_create(&app->mc_handle[0]);
@@ -1536,7 +1536,7 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
     FILE *fp = NULL;
     int ret =0;
 
-    sprintf(filename, "/opt/usr/dec_output_dump_%d_%d.yuv", app->width, app->height);
+    sprintf(filename, "/tmp/dec_output_dump_%d_%d.yuv", app->width, app->height);
     fp = fopen(filename, "ab");
 
     media_packet_get_video_plane_data_ptr(pkt, 0, &temp);
