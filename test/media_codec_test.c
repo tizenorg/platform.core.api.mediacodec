@@ -87,6 +87,7 @@ enum
     CURRENT_STATUS_GET_OUTPUT,
     CURRENT_STATUS_RESET_OUTPUT_BUFFER,
     CURRENT_STATUS_SET_SIZE,
+    CURRENT_STATUS_AUTO,
 };
 
 typedef enum
@@ -176,6 +177,9 @@ media_format_h venc_fmt = NULL;
 #if DUMP_OUTBUF
 FILE *fp_out = NULL;
 #endif
+FILE *fp = NULL;
+char filename[100]="/tmp/mc_dump.out";
+int allow_dump = 1;
 
 /* Internal Functions */
 static int _create_app(void *data);
@@ -681,9 +685,64 @@ static void _mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data)
     return;
 }
 
-int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
+static int GetChunkSize(App *app)
+{
+    /* The return values are based on testing trails and are not unique */
+    if(app->type==AUDIO_ENC)
+           return 640;
+    switch (app->mime)
+    {
+        case MEDIA_FORMAT_AMR_NB:
+        case MEDIA_FORMAT_AMR_WB:
+            return 50;
+
+        case MEDIA_FORMAT_AAC_LC:
+        case MEDIA_FORMAT_AAC_HE:
+        case MEDIA_FORMAT_AAC_HE_PS:
+            return 500;
+
+        case MEDIA_FORMAT_FLAC:
+            return 5000;
+
+        case MEDIA_FORMAT_WMALSL:
+        case MEDIA_FORMAT_WMAPRO:
+        case MEDIA_FORMAT_WMAV1:
+        case MEDIA_FORMAT_WMAV2:
+            return 1024;
+
+        case MEDIA_FORMAT_MPEG4_SP:
+        case MEDIA_FORMAT_MPEG4_ASP:
+            return app->height*app->width/200;
+
+        case MEDIA_FORMAT_VC1:
+        case MEDIA_FORMAT_VP8:
+        case MEDIA_FORMAT_VP9:
+            return app->height*app->width/500;
+    }
+    if(app->type==AUDIO_DEC)
+        return samplerate/10;
+    return app->height*app->width/50;
+}
+
+void common_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
+{
+    int offset = app->length - app->offset;
+    static int chunk_size = 0;
+
+    if(!chunk_size)
+        chunk_size =  GetChunkSize(app);
+
+    *have_frame = TRUE;
+    *data = app->data + app->offset;
+    *size = (chunk_size <= offset) ? chunk_size : offset;
+
+    app->offset += *size;
+}
+
+int  _mediacodec_set_codec(int typ, int codecid, int flag, int *hardware)
 {
     bool encoder;
+
     //bool hardware;
     media_format_mimetype_e mime;
     encoder = GET_IS_ENCODER(flag) ? 1 : 0;
@@ -753,10 +812,44 @@ int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
             break;
         case MEDIACODEC_WMALSL:
             break;
+        case MEDIACODEC_H261:
+            mime = MEDIA_FORMAT_H261;
+            break;
+        case MEDIACODEC_MPEG2:
+            mime = MEDIA_FORMAT_MPEG2_SP;
+            break;
+        case MEDIACODEC_VC1:
+            mime = MEDIA_FORMAT_MPEG4_SP;
+            break;
+        case MEDIACODEC_VP8:
+            mime = MEDIA_FORMAT_VP8;
+            break;
+        case MEDIACODEC_VP9:
+            mime = MEDIA_FORMAT_VP9;
+            break;
+        case MEDIACODEC_HEVC:
+            mime = MEDIA_FORMAT_HEVC;
+            break;
         default:
             LOGE("NOT SUPPORTED!!!!");
             break;
     }
+
+    {
+        /* Internal function for getting parser status from INI file */
+        int _mc_get_parser_status(void);
+        if(_mc_get_parser_status())
+        {
+            if(typ != VIDEO_ENC)
+                extractor = common_extractor;
+            else
+            {
+                extractor = yuv_extractor;
+                mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+            }
+        }
+    }
+
     //media_format_set_video_mime(vdec_fmt, mime);
     return mime;
 }
@@ -893,7 +986,7 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
     if (ret != MEDIACODEC_ERROR_NONE) {
         g_print("get_output failed\n");
     }
-    //decoder_output_dump(app, out_pkt);
+    decoder_output_dump(app, out_pkt);
 
 #if DUMP_OUTBUF
     void *data;
@@ -952,6 +1045,19 @@ static void _mediacodec_prepare(App *app)
 #if DUMP_OUTBUF
     fp_out = fopen("/opt/usr/codec_dump.out", "wb");
 #endif
+
+    if(allow_dump && filename[0])
+    {
+        fp = fopen(filename, "wb");
+        if(fp == NULL)
+            g_print("File %s create failed\n", filename);
+        else if(app->type == AUDIO_ENC && app->codecid == MEDIACODEC_AMR_NB)
+        {
+            const char AMR_header [] = "#!AMR\n";
+            fwrite(&AMR_header[0], 1, sizeof(AMR_header)-1, fp);
+        }
+    }
+
     /* create instance */
     ret = mediacodec_create(&app->mc_handle[0]);
     if (ret  != MEDIACODEC_ERROR_NONE) {
@@ -967,7 +1073,7 @@ static void _mediacodec_prepare(App *app)
     }
 
 
-    app->mime = _mediacodec_set_codec(app->codecid, app->flag, &app->hardware);
+    app->mime = _mediacodec_set_codec(app->type,app->codecid, app->flag, &app->hardware);
 
     /* set codec info */
     ret = media_format_create(&vdec_fmt);
@@ -1033,6 +1139,8 @@ static void _mediacodec_prepare(App *app)
 
     g_print("---------------------------\n");
 
+    if(fp)
+        fclose(fp);
 
     return;
 }
@@ -1111,6 +1219,9 @@ void reset_menu_state()
     return;
 }
 
+void auto_test(int n);
+void print_list();
+
 void _interpret_main_menu(char *cmd, App *app)
 {
     int len =  strlen(cmd);
@@ -1120,6 +1231,8 @@ void _interpret_main_menu(char *cmd, App *app)
             g_menu_state = CURRENT_STATUS_FILENAME;
         } else if (strncmp(cmd, "o", 1) == 0) {
             g_menu_state = CURRENT_STATUS_GET_OUTPUT;
+        } else if (strncmp(cmd, "z", 1) == 0) {
+            g_menu_state = CURRENT_STATUS_AUTO;
         } else if (strncmp(cmd, "q", 1) == 0)
         {
             quit_program();
@@ -1198,6 +1311,9 @@ static void displaymenu(void)
         g_print("               MPEG1  = 105\n");
         g_print("               MPEG2  = 106\n");
         g_print("               MPEG4  = 107\n");
+        g_print("               HEVC   = 108\n");
+        g_print("               VP8    = 109\n");
+        g_print("               VC1    = 111\n");
         g_print("               -------------------\n");
         g_print("*** Flags : Select Combination Number (e.g. DEOCDER + TYPE_SW = 10)\n");
         g_print("               CODEC : ENCODER =  1       DECODER =  2\n");
@@ -1227,6 +1343,11 @@ static void displaymenu(void)
     else if (g_menu_state == CURRENT_STATUS_GET_OUTPUT)
     {
         g_print("*** input get output buffer number\n");
+    }
+    else if (g_menu_state == CURRENT_STATUS_AUTO)
+    {
+        print_list();
+        g_print("*** get test number\n");
     }
     else
     {
@@ -1268,7 +1389,9 @@ static void interpret (char *cmd, App *app)
                     case 0:
                         tmp = atoi(cmd);
 
-                        if(tmp > 100 &&
+                        if (tmp == 110 || tmp == 111)	/* 0x20A0 to 0x20B0 */
+                            app->codecid = 0x20A0 + 0x10*(tmp-110);
+                        else if(tmp > 100 &&
                            (tmp != 112) &&
                            (tmp != 128) &&
                            (tmp != 144) &&
@@ -1402,8 +1525,16 @@ static void interpret (char *cmd, App *app)
         case CURRENT_STATUS_GET_OUTPUT:
             {
                 static int num = 0;
-                num = atoi(cmd);
+                allow_dump = num = atoi(cmd);
                 //_mediacodec_get_output_n(num);
+                reset_menu_state();
+            }
+            break;
+        case CURRENT_STATUS_AUTO:
+            {
+                static int num = 0;
+                num = atoi(cmd);
+                auto_test(num);
                 reset_menu_state();
             }
             break;
@@ -1430,11 +1561,10 @@ static void display_sub_basic()
     g_print("pi. Process input \n");
     g_print("o. Get output \t\t");
     g_print("rb. Reset output buffer \n");
-    g_print("pa. Process all frames \n");
-    g_print("un. Unprepare \t\t");
+    g_print("pa. Process all frames \t");
+    g_print("un. Unprepare\n");
     g_print("dt. Destroy \t\t");
-    g_print("q. quite test suite \t");
-    g_print("\n");
+    g_print("q. quite test suite \n");
     g_print("=========================================================================================\n");
 }
 
@@ -1527,17 +1657,71 @@ void mc_hex_dump(char *desc, void *addr, int len)
 }
 
 
+/**
+ *  Add ADTS header at the beginning of each and every AAC packet.
+ *  This is needed as MediaCodec encoder generates a packet of raw AAC data.
+ *  Note the packetLen must count in the ADTS header itself.
+ **/
+void add_adts_header_for_aacenc(unsigned char *buffer, int packetLen) {
+    int profile = 2;    //AAC LC (0x01)
+    int freqIdx = 3;    //48KHz (0x03)
+    int chanCfg = 2;    //CPE (0x02)
+
+    if (samplerate == 96000) freqIdx = 0;
+    else if (samplerate == 88200) freqIdx = 1;
+    else if (samplerate == 64000) freqIdx = 2;
+    else if (samplerate == 48000) freqIdx = 3;
+    else if (samplerate == 44100) freqIdx = 4;
+    else if (samplerate == 32000) freqIdx = 5;
+    else if (samplerate == 24000) freqIdx = 6;
+    else if (samplerate == 22050) freqIdx = 7;
+    else if (samplerate == 16000) freqIdx = 8;
+    else if (samplerate == 12000) freqIdx = 9;
+    else if (samplerate == 11025) freqIdx = 10;
+    else if (samplerate == 8000) freqIdx = 11;
+
+    if ((channel == 1) || (channel == 2))
+        chanCfg = channel;
+
+    // fill in ADTS data
+    buffer[0] = (char)0xFF;
+    buffer[1] = (char)0xF1;
+    buffer[2] = (char)(((profile-1)<<6) + (freqIdx<<2) +(chanCfg>>2));
+    buffer[3] = (char)(((chanCfg&3)<<6) + (packetLen>>11));
+    buffer[4] = (char)((packetLen&0x7FF) >> 3);
+    buffer[5] = (char)(((packetLen&7)<<5) + 0x1F);
+    buffer[6] = (char)0xFC;
+}
+
 static void decoder_output_dump(App *app, media_packet_h pkt)
 {
     unsigned char *temp;
     int i = 0;
     int stride_width, stride_height;
-    char filename[100]={0};
-    FILE *fp = NULL;
     int ret =0;
 
-    sprintf(filename, "/opt/usr/dec_output_dump_%d_%d.yuv", app->width, app->height);
-    fp = fopen(filename, "ab");
+    if(fp == NULL)
+        return;
+
+    if(app->type != VIDEO_DEC)
+    {
+        void *data = NULL;
+        uint64_t buf_size = 0;
+
+        media_packet_get_buffer_size(pkt, &buf_size);
+        media_packet_get_buffer_data_ptr(pkt, &data);
+
+        if(app->type == AUDIO_ENC && app->codecid == MEDIACODEC_AAC)
+        {
+            /* This is used only AAC encoder case for adding each ADTS frame header */
+            add_adts_header_for_aacenc(buf_adts, (buf_size+ADTS_HEADER_SIZE));
+            fwrite(&buf_adts[0], 1, ADTS_HEADER_SIZE, fp);
+        }
+	fwrite(data, 1, buf_size, fp);
+        fflush(fp);
+        g_print("other than video dec output dumped\n");
+        return;
+    }
 
     media_packet_get_video_plane_data_ptr(pkt, 0, &temp);
     media_packet_get_video_stride_width(pkt, 0, &stride_width);
@@ -1570,9 +1754,95 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
             temp += stride_width;
         }
     }
+    fflush(fp);
 
-    g_print("codec dec output dumped!!%d\n", ret);
-    fclose(fp);
+    g_print("video decoder output dumped!!%d\n", ret);
+}
 
+#define BASE_DIR                "./"
+#define T(a)	a,#a
+struct aa {
+        int use_encoder;
+        int use_video;
+        int use_hw;
+        int codec;
+        char* codec_str;
+        int width, height;
+        char* path;
+}list[] =
+{
+            {0, 1, 1, T(MEDIACODEC_H264), 1280, 544, "Simpsons.h264"},
+            {0, 1, 1, T(MEDIACODEC_H263), 352, 288, "sample_352x288.h263"},
+            {0, 1, 1, T(MEDIACODEC_MPEG4), 352, 288, "sample_352x288.mpeg4"},
+
+            {0, 1, 0, T(MEDIACODEC_H264),  1280, 544, "Simpsons.h264"},
+            {0, 1, 0, T(MEDIACODEC_H263),  352, 288, "sample_352x288.h263"},
+            {0, 1, 0, T(MEDIACODEC_MPEG4),  352, 288, "sample_352x288.mpeg4"},
+            {0, 1, 0, T(MEDIACODEC_MPEG2),  352, 288, "sample_352x288.mpeg2"},
+            {0, 1, 0, T(MEDIACODEC_H261),  352, 288, "sample_352x288.h261"},
+
+            {1, 1, 0, T(MEDIACODEC_H261), 352, 288, "I420_352x288.yuv"},
+            {1, 1, 0, T(MEDIACODEC_H263), 352, 288, "I420_352x288.yuv"},
+            {1, 1, 0, T(MEDIACODEC_MPEG4), 352, 288, "I420_352x288.yuv"},
+            {1, 1, 0, T(MEDIACODEC_MPEG2), 352, 288, "I420_352x288.yuv"},
+            {1, 1, 0, T(MEDIACODEC_HEVC), 352, 288, "I420_352x288.yuv"},
+            {1, 1, 0, T(MEDIACODEC_VP8), 352, 288, "I420_352x288.yuv"},
+
+            {1, 1, 1, T(MEDIACODEC_H264), 352, 288, "I420_352x288.yuv"},
+            {1, 1, 1, T(MEDIACODEC_H263), 352, 288, "I420_352x288.yuv"},
+            {1, 1, 1, T(MEDIACODEC_MPEG4), 352, 288, "I420_352x288.yuv"},
+
+            {0, 0, 0, T(MEDIACODEC_AAC_LC),  44100, 2, "SampleAAC.aac"},
+            {0, 0, 0, T(MEDIACODEC_AMR_NB),  8000, 1, "SampleAMR-NB.amr"},
+            {0, 0, 0, T(MEDIACODEC_AMR_WB),  16000, 1, "SampleAMR-WB.amr"},
+            {0, 0, 0, T(MEDIACODEC_MP3),  44100, 2, "SampleMP3.mp3"},
+
+            {1, 0, 0, T(MEDIACODEC_AAC_LC), 44100, 1, "aac.pcm"},	//F32LE
+            {1, 0, 0, T(MEDIACODEC_AMR_NB), 8000, 1, "s16le.pcm"},	// S16LE
+
+
+            {-1, -1, -1, -1, -1, -1, NULL}
+};
+
+void print_list()
+{
+    int i;
+    g_printf("AUTO TESTS --------->\n");
+    for(i=0 ; list[i].path ; ++i)
+    {
+        if(list[i].use_video)
+            g_printf("[%2d] %s VIDEO %s | %-6s | Width=%-5d Height=%-4d | File=%s [%d]\n", i+1, list[i].use_hw ? "HW" : "SW", list[i].use_encoder ? "Encoder" : "Decoder", &list[i].codec_str[11], list[i].width, list[i].height, list[i].path, i+1);
+        else
+            g_printf("[%2d] %s AUDIO %s | %-6s | SRate=%-5d Chanel=%-4d | File=%s [%d]\n", i+1, list[i].use_hw ? "HW" : "SW", list[i].use_encoder ? "Encoder" : "Decoder", &list[i].codec_str[11], list[i].width, list[i].height, list[i].path, i+1);
+    }
+    g_printf("------------------->\n");
+}
+
+void auto_test(int n)
+{
+    App* app = &s_app;
+    static char* extn[] = {"yuv", "venc", "pcm", "aenc"};
+
+    if(n<1 && n>sizeof(list)/sizeof(list[0])-1)
+        return;
+
+    n--;
+
+    app->type = 0;
+    if(!list[n].use_video)
+        app->type += 2;
+    if(list[n].use_encoder)
+        app->type++;
+
+    sprintf(filename, BASE_DIR"%s", list[n].path);
+    input_filepath(filename,app);
+    app->codecid = list[n].codec;
+    app->flag = 10 - (4*list[n].use_hw) - list[n].use_encoder;
+    app->width = list[n].width, app->height = list[n].height;
+    app->fps = 30.0; app->target_bits = 24;
+    app->bit = 32;
+    app->samplerate = app->width, app->channel = app->height;
+
+    sprintf(filename, "/tmp/mc_%s_%d_%s.%s", list[n].codec_str, n+1, list[n].path, extn[app->type]);
 }
 

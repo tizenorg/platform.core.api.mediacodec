@@ -271,11 +271,17 @@ media_format_mimetype_e _mc_convert_media_format_str_to_int(char *sformat )
     } else if (!strcmp(sformat,"H264_HP")) {
         iformat = MEDIA_FORMAT_H264_HP;
         goto endf;
+    } else if (!strcmp(sformat,"MPEG2_SP")) {
+        iformat = MEDIA_FORMAT_MPEG2_SP;
+        goto endf;
     } else if (!strcmp(sformat,"MPEG4_SP")) {
         iformat = MEDIA_FORMAT_MPEG4_SP;
         goto endf;
     } else if (!strcmp(sformat,"MPEG4_ASP")) {
         iformat = MEDIA_FORMAT_MPEG4_ASP;
+        goto endf;
+    } else if (!strcmp(sformat,"MJPEG")) {
+        iformat = MEDIA_FORMAT_MJPEG;
         goto endf;
     } else if (!strcmp(sformat,"AMR_NB")) {
         iformat = MEDIA_FORMAT_AMR_NB;
@@ -310,6 +316,9 @@ media_format_mimetype_e _mc_convert_media_format_str_to_int(char *sformat )
     } else if (!strcmp(sformat,"WMAPRO")) {
         iformat = MEDIA_FORMAT_WMAPRO;
         goto endf;
+    } else if (!strcmp(sformat,"VP8")) {
+        iformat = MEDIA_FORMAT_VP8;
+        goto endf;
     }
 
 endf:
@@ -322,6 +331,7 @@ int mc_ini_load(mc_ini_t *ini)
     gchar cname[256];
     int i = 0;
     dictionary *dict = NULL;
+    extern int use_parser;
 
     static const int codec_list = sizeof(general_codec_list) / sizeof(general_codec_list[0]);
 
@@ -352,6 +362,10 @@ int mc_ini_load(mc_ini_t *ini)
     if (dict) {/* if dict is available */
         /* general */
         MEDIA_CODEC_INI_GET_STRING( dict, ini->port_name, "port_in_use:media_codec_port",DEFAULT_PORT);
+
+        MEDIA_CODEC_INI_GET_STRING( dict, cname, "parser:use_parser",DEFAULT_PORT);
+        use_parser = cname[0] - '0';
+
         /* codec */
         for (i = 0; i < codec_list; i++) {
             memset(cname, 0x00, 256);
@@ -412,6 +426,7 @@ int mc_ini_load(mc_ini_t *ini)
         sprintf(cname+len, "%s", ":sw_encoder");
         MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[3],cname);
     }
+    printf("parser:use_parser = %d\n", use_parser);
 
     /* free dict as we got our own structure */
     iniparser_freedict(dict);
