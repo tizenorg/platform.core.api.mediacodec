@@ -83,7 +83,11 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest,
 static void _mc_send_eos_signal(mc_gst_core_t *core);
 static void _mc_wait_for_eos(mc_gst_core_t *core);
 
+int use_parser = 0;
+
 /* video vtable */
+int(*g_vtable[3])();
+
 int(*vdec_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_vdec_packet_with_outbuf,  &__mc_vdec_caps};
 int(*venc_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_venc_packet_with_outbuf, &__mc_venc_caps};
 
@@ -532,6 +536,15 @@ int __mc_fill_venc_packet_with_outbuf(mc_gst_core_t *core, void *data, int size,
             if (!_mc_check_h263_out_bytestream((unsigned char *)data, size, &sync_flag))
                 return MC_INVALID_IN_BUF;
             break;
+        case MEDIA_FORMAT_H261:
+        case MEDIA_FORMAT_HEVC:
+        case MEDIA_FORMAT_MJPEG:
+        case MEDIA_FORMAT_MPEG2_SP:
+        case MEDIA_FORMAT_MPEG2_MP:
+        case MEDIA_FORMAT_MPEG2_HP:
+        case MEDIA_FORMAT_VP8:
+        case MEDIA_FORMAT_VP9:
+                break;
         default:
             return MC_INVALID_IN_BUF;
     }
@@ -559,7 +572,9 @@ int __mc_fill_venc_packet_with_outbuf(mc_gst_core_t *core, void *data, int size,
 
 int __mc_create_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
-    return core->vtable[create_caps](core, caps, buff, codec_config);
+    if(core->vtable[create_caps])
+        return core->vtable[create_caps](core, caps, buff, codec_config);
+    return 0;
 }
 
 int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
@@ -1339,7 +1354,8 @@ int _mc_output_media_packet_new(mc_gst_core_t *core, bool video, bool encoder, m
         info = (mc_encoder_info_t *)core->codec_info;
 
         if (video) {
-            media_format_set_video_mime(core->output_fmt, out_mime);
+            /* Bypass for Not Support of MEDIACODEC_VP8/VP9 packet allocation in capi-media-tool */
+            media_format_set_video_mime(core->output_fmt, core->codec_id==MEDIACODEC_VP8 ? MEDIA_FORMAT_MJPEG : out_mime);
             media_format_set_video_width(core->output_fmt, info->width);
             media_format_set_video_height(core->output_fmt, info->height);
             media_format_set_video_avg_bps(core->output_fmt, info->bitrate);
@@ -1544,7 +1560,9 @@ static gpointer feed_task(gpointer data)
             goto ERROR;
         }
 
-        if (codec_config)
+        if(core->is_parser && !core->encoder)
+            initiative = false;
+        else if (codec_config)
             initiative = true;
 
         if (initiative) {
@@ -1574,7 +1592,6 @@ static gpointer feed_task(gpointer data)
             _mc_wait_for_eos(core);
             initiative = true;
         }
-
 
         continue;
 ERROR:
@@ -1627,11 +1644,79 @@ static void __mc_gst_start_feed(GstElement *pipeline, guint size, gpointer data)
     }
 }
 
+int __mc_video_enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    char* format = "I420";
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
+    if(core->is_hw)
+    {
+        format = "SN12";
+        g_object_set(GST_OBJECT(core->codec), "target-bitrate", enc_info->bitrate*1000, NULL);
+        *caps = gst_caps_new_simple(core->mime,
+            "width", G_TYPE_INT, enc_info->width,
+            "height", G_TYPE_INT, enc_info->height,
+            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
+            NULL);
+    }
+    else
+    {
+        *caps = gst_caps_new_simple(core->mime,
+            "format", G_TYPE_STRING, format,
+            "width", G_TYPE_INT, enc_info->width,
+            "height", G_TYPE_INT, enc_info->height,
+            "framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
+            NULL);
+    }
+    LOGD("%d, %d, %d", enc_info->width, enc_info->height, enc_info->fps);
+    return MC_ERROR_NONE;
+}
+
+int __mc_audio_enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
+{
+    char* format = NULL;
+    g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+    mc_encoder_info_t *enc_info = (mc_encoder_info_t *)core->codec_info;
+    if(core->codec_id ==  MEDIACODEC_AMR_NB)
+        format = "S16LE";
+    else if(core->codec_id == MEDIACODEC_AAC_LC ||core->codec_id ==  MEDIACODEC_AAC_HE ||core->codec_id ==  MEDIACODEC_AAC_HE_PS)
+    {
+        g_object_set(GST_OBJECT(core->codec), "compliance", -2, NULL);
+        format = "F32LE";
+    }
+    else return MC_NOT_SUPPORTED;
+    *caps = gst_caps_new_simple(core->mime,
+            "rate", G_TYPE_INT, enc_info->samplerate,
+            "channels", G_TYPE_INT, enc_info->channel,
+            "format", G_TYPE_STRING, format,
+            "layout", G_TYPE_STRING, "interleaved", NULL);
+    LOGD("mime : %s, samplerate :%d, channel : %d", core->mime, enc_info->samplerate, enc_info->channel);
+    return MC_ERROR_NONE;
+}
+
 static int _mc_link_vtable(mc_gst_core_t *core, mediacodec_codec_type_e id, gboolean encoder, gboolean is_hw)
 {
     MEDIACODEC_FENTER();
 
     g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
+
+    if(core->is_parser)
+    {
+        core->vtable = g_vtable;
+        if(encoder && core->video)
+        {
+            core->vtable[fill_inbuf] = is_hw ? __mc_fill_inbuf_with_mm_video_buffer : __mc_fill_inbuf_with_venc_packet;
+            core->vtable[fill_outbuf] = __mc_fill_venc_packet_with_outbuf;
+            core->vtable[create_caps] = __mc_video_enc_caps;
+        }
+        else
+        {
+            core->vtable[fill_inbuf] = __mc_fill_inbuf_with_packet;
+            core->vtable[fill_outbuf] = !core->video ? __mc_fill_packet_with_outbuf : is_hw ? __mc_fill_video_packet_with_mm_video_buffer : __mc_fill_vdec_packet_with_outbuf;
+            core->vtable[create_caps] = (encoder && !core->video) ? __mc_audio_enc_caps : NULL;
+        }
+        return MC_ERROR_NONE;
+    }
 
     switch (id) {
         case MEDIACODEC_AAC:
@@ -1801,6 +1886,7 @@ mc_ret_e mc_gst_prepare(mc_handle_t *mc_handle)
     new_core->is_hw = hardware;
     new_core->eos = false;
     new_core->encoder = encoder;
+    new_core->is_parser = use_parser;
     new_core->video = video;
     new_core->codec_info = encoder ? (void *)&mc_handle->info.encoder : (void *)&mc_handle->info.decoder;
     new_core->out_mime = codec_map[i].type.out_format;
@@ -2093,9 +2179,55 @@ ERROR:
     return FALSE;
 }
 
+static char * _mc_get_parser_name_from_codecid(mediacodec_codec_type_e codec_id)
+{
+    switch(codec_id) {
+        case MEDIACODEC_H264:
+            return "h264parse";
+
+        case MEDIACODEC_MPEG4:
+            return "mpeg4videoparse";
+
+        case MEDIACODEC_H263:
+            return "h263parse";
+
+        //case MEDIACODEC_AAC:
+        case MEDIACODEC_AAC_LC:
+        case MEDIACODEC_AAC_HE:
+        case MEDIACODEC_AAC_HE_PS:
+            return "aacparse";
+
+        case MEDIACODEC_MP3:
+            return "mpegaudioparse";
+
+        //case MEDIACODEC_AMR:
+        case MEDIACODEC_AMR_NB:
+        case MEDIACODEC_AMR_WB:
+            return "amrparse";
+
+        case MEDIACODEC_VORBIS:
+            return "vorbisparse";
+
+        case MEDIACODEC_FLAC:
+            return "flacparse";
+
+        case MEDIACODEC_MPEG2:
+            return "mpegvideoparse";
+
+        case MEDIACODEC_VC1:
+            return "vc1parse";
+
+        default:
+            return NULL;
+    }
+}
+
 mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t *core, gchar *factory_name)
 {
     GstBus *bus = NULL;
+    GstElement* elem[4];
+    int off=0;
+    char* parser_name = NULL;
 
     MEDIACODEC_FENTER();
 
@@ -2147,15 +2279,38 @@ mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t *core, gchar *factory_name)
         }
         g_object_set(core->fakesink, "enable-last-sample", FALSE, NULL);
 
-        /*__mc_link_elements(core);*/
-        gst_bin_add_many(GST_BIN(core->pipeline), core->appsrc, core->capsfilter, core->codec, core->fakesink, NULL);
-
-        /* link elements */
-        if (!(gst_element_link_many(core->appsrc, core->capsfilter, core->codec, core->fakesink, NULL)))
+        if(core->is_parser && !core->encoder)
+            parser_name = _mc_get_parser_name_from_codecid(core->codec_id);
+        if(parser_name != NULL)
         {
-            LOGE("gst_element_link_many is failed");
-            goto ERROR;
+            // Add parser
+            LOGD("parser is %s",parser_name);
+            core->parser = gst_element_factory_make(parser_name, NULL);
+            if (!core->parser) {
+                       LOGE("parser create fail");
+                    goto ERROR;
+            }
+            elem[off++] = core->parser;
         }
+        else
+        {
+            // always add caps
+            elem[off++] = core->capsfilter;
+        }
+        elem[off++] = core->codec;
+        elem[off++] = core->fakesink;
+
+        for( ; off<sizeof(elem)/sizeof(elem[0]) ; off++)
+            elem[off] = NULL;
+
+        gst_bin_add_many(GST_BIN(core->pipeline), core->appsrc, elem[0], elem[1], elem[2], elem[3], NULL);
+        if (!gst_element_link_many(core->appsrc, elem[0], elem[1], elem[2], elem[3], NULL))
+        {
+            g_print("Elements Linking Failed, Parser Allowed = %d, Parser Applied = %d\n", core->is_parser, core->parser?1:0);
+            GST_WARNING ("Can't link elements");
+            return -1;
+        }
+        g_print("Elements Linking Success, Parser Allowed = %d, Parser Applied = %d\n", core->is_parser, core->parser?1:0);
 
         /* connect signals, bus watcher */
         bus = gst_pipeline_get_bus(GST_PIPELINE(core->pipeline));
@@ -2199,6 +2354,9 @@ ERROR:
 
     if (core->capsfilter)
         gst_object_unref(GST_OBJECT(core->capsfilter));
+
+    if (core->parser)
+        gst_object_unref(GST_OBJECT(core->parser));
 
     if (core->fakesink)
         gst_object_unref(GST_OBJECT(core->fakesink));
@@ -2622,9 +2780,25 @@ static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet
     mm_vbuffer->stride_height[0] = surface_info.planes[0].size / surface_info.planes[0].stride;
     mm_vbuffer->stride_width[1] = surface_info.planes[1].stride;
     mm_vbuffer->stride_height[1] = surface_info.planes[1].size / surface_info.planes[1].stride;
-    mm_vbuffer->plane_num = 2;
 
-    LOGD("size[0] : %d, size[1] : %d, bo[0] :%p, bo[1] :%p", mm_vbuffer->size[0], mm_vbuffer->size[1], mm_vbuffer->handle.bo[0], mm_vbuffer->handle.bo[1]);
+#if 1 /* Change for OMX HW encoders */
+    mm_vbuffer->size[0] = surface_info.planes[0].size;
+    mm_vbuffer->size[1] = surface_info.planes[1].size;
+    mm_vbuffer->plane_num = 2;
+    mm_vbuffer->handle.dmabuf_fd[0] = (tbm_bo_get_handle(mm_vbuffer->handle.bo[0], TBM_DEVICE_MM)).u32;
+    mm_vbuffer->handle.dmabuf_fd[1] = (tbm_bo_get_handle(mm_vbuffer->handle.bo[1], TBM_DEVICE_MM)).u32;;
+    mm_vbuffer->handle.paddr[0] = (tbm_bo_map(mm_vbuffer->handle.bo[0], TBM_DEVICE_CPU,TBM_OPTION_WRITE)).ptr;
+    mm_vbuffer->handle.paddr[1] = (tbm_bo_map(mm_vbuffer->handle.bo[1], TBM_DEVICE_CPU,TBM_OPTION_WRITE)).ptr;
+    mm_vbuffer->data[0] = mm_vbuffer->handle.paddr[0];
+    mm_vbuffer->data[1] = mm_vbuffer->handle.paddr[1];
+
+    tbm_bo_unmap(mm_vbuffer->handle.bo[0]);
+    tbm_bo_unmap(mm_vbuffer->handle.bo[1]);
+
+    LOGD("s[0] : %d, s[1] : %d, size[0] : %d, size[1] : %d, bo[0] :%p, bo[1] :%p, a[0] : %p, a[1] : %p",
+        mm_vbuffer->stride_width[0], mm_vbuffer->stride_height[0], mm_vbuffer->size[0], mm_vbuffer->size[1],
+        mm_vbuffer->handle.bo[0], mm_vbuffer->handle.bo[1], mm_vbuffer->data[0], mm_vbuffer->data[1]);
+#endif
 
     return mm_vbuffer;
 }
