@@ -91,36 +91,57 @@ int(*venc_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_venc_packet_wi
 int(*vdec_h264_sw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* FFMPEG H.264 Decoder Vtable */
                                   &__mc_fill_vdec_packet_with_outbuf,
                                   &__mc_vdec_caps};
-int(*vdec_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* SPRD H.264 Decoder Vtable */
-                                  &__mc_fill_video_packet_with_mm_video_buffer,
-                                  &__mc_h264dec_caps};
-int(*venc_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,         /* SPRD H.264 Encoder Vtable */
-                                  &__mc_fill_venc_packet_with_outbuf,
-                                  &__mc_hw_h264enc_caps};
 int(*vdec_mpeg4_sw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* FFMPEG MPEG4 Decoder Vtable */
                                   &__mc_fill_vdec_packet_with_outbuf,
                                   &__mc_vdec_mpeg4_caps};
-int(*vdec_mpeg4_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* SPRD MPEG4 Decoder Vtable */
-                                  &__mc_fill_video_packet_with_mm_video_buffer,
-                                  &__mc_sprddec_mpeg4_caps};
 int(*venc_mpeg4_sw_vtable[])() = {&__mc_fill_inbuf_with_venc_packet,            /* SPRD MPEG4 Encoder Vtable */
                                   &__mc_fill_venc_packet_with_outbuf,
                                   &__mc_venc_caps};
-int(*venc_mpeg4_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,        /* SPRD MPEG4 Encoder Vtable */
-                                  &__mc_fill_venc_packet_with_outbuf,
-                                  &__mc_sprdenc_mpeg4_caps};
 int(*vdec_h263_sw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* FFMPEG MPEG4 Decoder Vtable */
                                   &__mc_fill_vdec_packet_with_outbuf,
                                   &__mc_vdec_h263_caps};
-int(*vdec_h263_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* SPRD MPEG4 Decoder Vtable */
-                                  &__mc_fill_video_packet_with_mm_video_buffer,
-                                  &__mc_sprddec_mpeg4_caps};
 int(*venc_h263_sw_vtable[])() = {&__mc_fill_inbuf_with_venc_packet,            /* SPRD MPEG4 Encoder Vtable */
                                   &__mc_fill_venc_packet_with_outbuf,
                                   &__mc_venc_caps};
+#ifdef TIZEN_PROFILE_LITE
+int(*vdec_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* SPRD H.264 Decoder Vtable */
+                                  &__mc_fill_video_packet_with_mm_video_buffer,
+                                  &__mc_sprddec_caps};
+int(*venc_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,         /* SPRD H.264 Encoder Vtable */
+                                  &__mc_fill_venc_packet_with_outbuf,
+                                  &__mc_sprdenc_caps};
+int(*vdec_mpeg4_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* SPRD MPEG4 Decoder Vtable */
+                                  &__mc_fill_video_packet_with_mm_video_buffer,
+                                  &__mc_sprddec_mpeg4_caps};
+int(*venc_mpeg4_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,        /* SPRD MPEG4 Encoder Vtable */
+                                  &__mc_fill_venc_packet_with_outbuf,
+                                  &__mc_sprdenc_mpeg4_caps};
+int(*vdec_h263_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* SPRD MPEG4 Decoder Vtable */
+                                  &__mc_fill_video_packet_with_mm_video_buffer,
+                                  &__mc_sprddec_mpeg4_caps};
 int(*venc_h263_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,        /* SPRD MPEG4 Encoder Vtable */
                                   &__mc_fill_venc_packet_with_outbuf,
                                   &__mc_sprdenc_mpeg4_caps};
+#else
+int(*vdec_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                  /* EXYNOS H.264 Decoder Vtable */
+                                  &__mc_fill_video_packet_with_mm_video_buffer,
+                                  &__mc_h264dec_caps};
+int(*venc_h264_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,         /* EXYNOS H.264 Encoder Vtable */
+                                  &__mc_fill_venc_packet_with_outbuf,
+                                  &__mc_hw_h264enc_caps};
+int(*vdec_mpeg4_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* EXYNOS MPEG4 Decoder Vtable */
+                                  &__mc_fill_video_packet_with_mm_video_buffer,
+                                  &__mc_sprddec_mpeg4_caps};
+int(*venc_mpeg4_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,        /* EXYNOS MPEG4 Encoder Vtable */
+                                  &__mc_fill_venc_packet_with_outbuf,
+                                  &__mc_sprdenc_mpeg4_caps};
+int(*vdec_h263_hw_vtable[])() = {&__mc_fill_inbuf_with_packet,                 /* EXYNOS MPEG4 Decoder Vtable */
+                                  &__mc_fill_video_packet_with_mm_video_buffer,
+                                  &__mc_sprddec_mpeg4_caps};
+int(*venc_h263_hw_vtable[])() = {&__mc_fill_inbuf_with_mm_video_buffer,        /* EXYNOS MPEG4 Encoder Vtable */
+                                  &__mc_fill_venc_packet_with_outbuf,
+                                  &__mc_sprdenc_mpeg4_caps};
+#endif
 
 /* audio vtable */
 int(*aenc_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_packet_with_outbuf, &__mc_aenc_caps};
@@ -2605,7 +2626,7 @@ static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet
 #ifdef TIZEN_PROFILE_LITE
     int phy_addr = 0;
     int phy_size = 0;
-    tbm_bo_handle handle_fd = tbm_bo_get_handle(bo, TBM_DEVICE_MM);
+    tbm_bo_handle handle_fd = tbm_bo_get_handle(mm_vbuffer->handle.bo[0], TBM_DEVICE_MM);
 
     if (__tbm_get_physical_addr_bo(handle_fd, &phy_addr, &phy_size) == 0) {
         mm_vbuffer->handle.paddr[0] = (void *)phy_addr;
