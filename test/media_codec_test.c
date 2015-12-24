@@ -1544,7 +1544,7 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
 		}
 	}
 
-	g_print("codec dec output dumped!!%d\n", ret);
+	g_print ("codec dec output dumped!!%d\n", ret);
 	fclose(fp);
 
 }
