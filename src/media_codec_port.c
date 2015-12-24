@@ -27,6 +27,7 @@
 #include <media_codec_spec_emul.h>
 
 static mc_codec_spec_t spec_emul[MEDIA_CODEC_MAX_CODEC_TYPE];
+extern int use_parser;
 
 int mc_create(MMHandleType *mediacodec)
 {
@@ -351,7 +352,7 @@ int mc_process_input(MMHandleType mediacodec, media_packet_h inbuf, uint64_t tim
 		return MC_INVALID_ARG;
 	}
 
-	if (mc_handle->is_video) {
+	if (!use_parser && mc_handle->is_video) {
 		if ((ret = mc_sniff_bitstream(mc_handle, inbuf)) != MC_ERROR_NONE)
 			return MC_INVALID_IN_BUF;
 	}
@@ -854,3 +855,8 @@ int mc_sniff_yuv(mc_handle_t *handle, media_packet_h pkt)
 	return ret;
 }
 
+int _mc_get_parser_status(void)
+{
+	g_print("Query Parser Status = %d\n", use_parser);
+	return use_parser;
+}

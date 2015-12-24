@@ -119,6 +119,7 @@ struct _mc_gst_core_t
     bool encoder;
     bool video;
     bool is_hw;
+    bool is_parser;
     bool eos;
     bool eos_waiting;
     bool codec_config;
