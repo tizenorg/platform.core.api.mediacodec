@@ -29,7 +29,9 @@
 
 #define PACKAGE "media_codec_test"
 #define MAX_HANDLE		        4
-//#define DUMP_OUTBUF           1
+#if 0
+#define DUMP_OUTBUF           1
+#endif
 #define TEST_FILE_SIZE	      (10 * 1024 * 1024)
 #define MAX_STRING_LEN	      256
 
@@ -267,13 +269,12 @@ void h264_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 		else {
 			if ((zero_count >= 2) && (val == 1))
 				break;
-			else {
+			else
 				zero_count = 0;
-			}
 		}
 	}
 
-	if(zero_count > 3)
+	if (zero_count > 3)
 		zero_count = 3;
 
 	read = (index - zero_count - 1);
@@ -281,34 +282,33 @@ void h264_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 	nal_unit_type = *(app->data+app->offset+4) & 0x1F;
 	g_print("nal_unit_type : %x\n", nal_unit_type);
 
-	switch ( nal_unit_type )
-	{
-		case NAL_SEQUENCE_PARAMETER_SET:
-			g_print("nal_unit_type : SPS\n");
-			state |= MC_EXIST_SPS;
-			break;
-		case NAL_PICTURE_PARAMETER_SET:
-			g_print("nal_unit_type : PPS\n");
-			state |= MC_EXIST_PPS;
-			break;
-		case NAL_SLICE_IDR:
-		case NAL_SEI:
-			g_print ("nal_unit_type : IDR\n");
-			state |= MC_EXIST_IDR;
-			break;
-		case NAL_SLICE_NO_PARTITIONING:
-		case NAL_SLICE_PART_A:
-		case NAL_SLICE_PART_B:
-		case NAL_SLICE_PART_C:
-			state |= MC_EXIST_SLICE;
-			break;
-		default:
-			g_print ("nal_unit_type : %x", nal_unit_type);
-			break;
+	switch (nal_unit_type) {
+	case NAL_SEQUENCE_PARAMETER_SET:
+		g_print("nal_unit_type : SPS\n");
+		state |= MC_EXIST_SPS;
+		break;
+	case NAL_PICTURE_PARAMETER_SET:
+		g_print("nal_unit_type : PPS\n");
+		state |= MC_EXIST_PPS;
+		break;
+	case NAL_SLICE_IDR:
+	case NAL_SEI:
+		g_print ("nal_unit_type : IDR\n");
+		state |= MC_EXIST_IDR;
+		break;
+	case NAL_SLICE_NO_PARTITIONING:
+	case NAL_SLICE_PART_A:
+	case NAL_SLICE_PART_B:
+	case NAL_SLICE_PART_C:
+		state |= MC_EXIST_SLICE;
+		break;
+	default:
+		g_print ("nal_unit_type : %x", nal_unit_type);
+		break;
 	}
 
-	init = CHECK_VALID_PACKET(state, MC_VALID_FIRST_SLICE) ? 1 :0;
-	slice = CHECK_VALID_PACKET(state, MC_EXIST_SLICE) ? 1 :0;
+	init = CHECK_VALID_PACKET(state, MC_VALID_FIRST_SLICE) ? 1 : 0;
+	slice = CHECK_VALID_PACKET(state, MC_EXIST_SLICE) ? 1 : 0;
 	idr = CHECK_VALID_PACKET(state, MC_EXIST_IDR) ? 1 : 0;
 	g_print("status : %d, slice : %d, idr : %d\n", init, slice, idr);
 
@@ -325,7 +325,6 @@ void h264_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 	} else {
 		*data = app->data+app->offset;
 		*size = read;
-		//app->offset += read;
 	}
 DONE:
 	app->offset += read;
@@ -395,7 +394,7 @@ void amrenc_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 	int read_size;
 	int offset = app->length - app->offset;
 
-	if(app->is_amr_nb)
+	if (app->is_amr_nb)
 		read_size = AMRNB_PCM_INPUT_SIZE;
 	else
 		read_size = AMRWB_PCM_INPUT_SIZE;
@@ -451,7 +450,6 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 
 	header = GST_READ_UINT32_BE(pData);
 
-
 	if (header == 0) {
 		g_print ("[ERROR] read header size is 0\n");
 		*have_frame = FALSE;
@@ -492,7 +490,7 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 		bitrate = (header >> 12) & 0xF;
 		hdr_bitrate = mp3types_bitrates[lsf][layer - 1][bitrate] * 1000;
 		/* The caller has ensured we have a valid header, so bitrate can't be zero here. */
-		if(hdr_bitrate == 0)
+		if (hdr_bitrate == 0)
 			*have_frame = FALSE;
 	}
 
@@ -508,16 +506,16 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 	padding = (header >> 9) & 0x1;
 
 	switch (layer) {
-		case 1:
-			read_size = 4 * ((hdr_bitrate * 12) / sf + padding);
-			break;
-		case 2:
-			read_size = (hdr_bitrate * 144) / sf + padding;
-			break;
-		default:
-		case 3:
-			read_size = (hdr_bitrate * 144) / (sf << lsf) + padding;
-			break;
+	case 1:
+		read_size = 4 * ((hdr_bitrate * 12) / sf + padding);
+		break;
+	case 2:
+		read_size = (hdr_bitrate * 144) / sf + padding;
+		break;
+	default:
+	case 3:
+		read_size = (hdr_bitrate * 144) / (sf << lsf) + padding;
+		break;
 	}
 	g_print("header : %d, read : %d\n", header, read_size);
 
@@ -549,8 +547,7 @@ void extract_input_aacdec_m4a_test(App *app, unsigned char* data, int *size, boo
 	if (feof(fd))
 		return 0;
 
-	if (frame_count == 0)
-	{
+	if (frame_count == 0) {
 		/*
 		 * CAUTION : Codec data is needed only once  in first time
 		 * Codec data is made(or extracted) by MP4 demuxer in 'esds' box.
@@ -570,8 +567,8 @@ void extract_input_aacdec_m4a_test(App *app, unsigned char* data, int *size, boo
 		 *     - codec data: channels : 2
 		 */
 		/* 2 bytes are mandatory */
-		codecdata[0] = 0x11;         //ex) (5bit) 2 (LC) / (4bit) 3 (48khz)
-		codecdata[1] = 0x90;         //ex) (4bit) 2 (2ch)
+		codecdata[0] = 0x11;         /* ex) (5bit) 2 (LC) / (4bit) 3 (48khz)*/
+		codecdata[1] = 0x90;         /* ex) (4bit) 2 (2ch) */
 		/* othter bytes are (optional) epconfig information */
 		codecdata[2] = 0x56;
 		codecdata[3] = 0xE5;
@@ -588,8 +585,8 @@ void extract_input_aacdec_m4a_test(App *app, unsigned char* data, int *size, boo
 		 *     - codec data: channels : 1
 		 */
 		/* 2 bytes are mandatory */
-		codecdata[0] = 0x13;         //ex) (5bit) 2 (LC) / (4bit) 9 (22khz)
-		codecdata[1] = 0x88;         //ex) (4bit) 1 (1ch)
+		codecdata[0] = 0x13;         /* ex) (5bit) 2 (LC) / (4bit) 9 (22khz) */
+		codecdata[1] = 0x88;         /* ex) (4bit) 1 (1ch) */
 		/* othter bytes are (optional) epconfig information */
 		codecdata[2] = 0x56;
 		codecdata[3] = 0xE5;
@@ -600,40 +597,36 @@ void extract_input_aacdec_m4a_test(App *app, unsigned char* data, int *size, boo
 
 		memcpy(aacdata, codecdata, AAC_CODECDATA_SIZE);
 
-		result = fread(buffer, 1, header_size, fd);   //adts header
-		if(result != header_size)
-		{
+		result = fread(buffer, 1, header_size, fd);   /* adts header */
+		if (result != header_size)
 			return -1;
-		}
 
 		if ((buffer != NULL) && (buffer[0] == 0xff) && ((buffer[1] & 0xf6) == 0xf0)) {
 			readsize = ((buffer[3] & 0x03) << 11) | (buffer[4] << 3) | ((buffer[5] & 0xe0) >> 5);
 			readsize = readsize -header_size;
-			result = fread(buffer, 1, readsize, fd);    //Make only RAW data, so exclude header 7 bytes
+			result = fread(buffer, 1, readsize, fd);    /* Make only RAW data, so exclude header 7 bytes */
 			memcpy(aacdata+AAC_CODECDATA_SIZE, buffer, readsize);
 		}
 
-		g_print( "[example] Insert 'codec_data' in 1st frame buffer size (%d)\n", readsize+AAC_CODECDATA_SIZE);
-		return (readsize + AAC_CODECDATA_SIZE);           //return combination of (codec_data + raw_data)
+		g_print("[example] Insert 'codec_data' in 1st frame buffer size (%d)\n", readsize+AAC_CODECDATA_SIZE);
+		return (readsize + AAC_CODECDATA_SIZE);           /* return combination of (codec_data + raw_data) */
 	}
 
-	result = fread(buffer, 1, header_size, fd);   //adts header
-	if(result != header_size)
-	{
+	result = fread(buffer, 1, header_size, fd);   /* adts header */
+	if (result != header_size)
 		exit(1);
-	}
 
 	if ((buffer != NULL) && (buffer[0] == 0xff) && ((buffer[1] & 0xf6) == 0xf0)) {
 		readsize = ((buffer[3] & 0x03) << 11) | (buffer[4] << 3) | ((buffer[5] & 0xe0) >> 5);
 		readsize = readsize -header_size;
-		result = fread(buffer, 1, readsize, fd);    //Make only RAW data, so exclude header 7 bytes
+		result = fread(buffer, 1, readsize, fd);    /* Make only RAW data, so exclude header 7 bytes */
 		memcpy(aacdata, buffer, readsize);
 	} else {
 		readsize = 0;
 		g_print("[FAIL] Not found aac frame sync.....\n");
 	}
 
-	return readsize;            //return only raw_data
+	return readsize;            /* return only raw_data */
 }
 #endif
 
@@ -664,8 +657,7 @@ void extract_input_aacdec_m4a_test(App *app, unsigned char* data, int *size, boo
  */
 static void _mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data)
 {
-	if (pkt != NULL)
-	{
+	if (pkt != NULL) {
 		g_print("Used input buffer = %p\n", pkt);
 		media_packet_destroy(pkt);
 	}
@@ -675,80 +667,78 @@ static void _mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data)
 int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
 {
 	bool encoder;
-	//bool hardware;
 	media_format_mimetype_e mime;
 	encoder = GET_IS_ENCODER(flag) ? 1 : 0;
 	*hardware = GET_IS_HW(flag) ? 1 : 0;
 
 	switch (codecid) {
-		case MEDIACODEC_H264:
-			if (encoder) {
-				extractor = yuv_extractor;
-				mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
-			} else {
-				extractor = h264_extractor;
-				mime = MEDIA_FORMAT_H264_SP;
-			}
-			break;
-		case MEDIACODEC_MPEG4:
-			if (encoder) {
-				extractor = yuv_extractor;
-				mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
-			} else {
-				extractor = h264_extractor;
-				mime = MEDIA_FORMAT_MPEG4_SP;
-			}
-			break;
-		case MEDIACODEC_H263:
-			if (encoder) {
-				extractor = yuv_extractor;
-				mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
-			} else {
-				extractor = h264_extractor;
-				mime = MEDIA_FORMAT_H263P;
-			}
-			break;
-		case MEDIACODEC_AAC:
-			if (encoder) {
-				extractor = aacenc_extractor;
-				mime = MEDIA_FORMAT_PCM;
-			} else {
-				extractor = aacdec_extractor;
-				mime = MEDIA_FORMAT_AAC;
-			}
-			break;
-		case MEDIACODEC_AAC_HE:
-			if (encoder) {
-				extractor = aacenc_extractor;
-				mime = MEDIA_FORMAT_PCM;
-			} else {
-				//extractor = aacdec_extractor;
-				mime = MEDIA_FORMAT_AAC_HE;
-			}
-			break;
-		case MEDIACODEC_AAC_HE_PS:
-			break;
-		case MEDIACODEC_MP3:
-			extractor = mp3dec_extractor;
-			mime = MEDIA_FORMAT_MP3;
-			break;
-		case MEDIACODEC_VORBIS:
-			break;
-		case MEDIACODEC_FLAC:
-			break;
-		case MEDIACODEC_WMAV1:
-			break;
-		case MEDIACODEC_WMAV2:
-			break;
-		case MEDIACODEC_WMAPRO:
-			break;
-		case MEDIACODEC_WMALSL:
-			break;
-		default:
-			LOGE("NOT SUPPORTED!!!!");
-			break;
+	case MEDIACODEC_H264:
+		if (encoder) {
+			extractor = yuv_extractor;
+			mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+		} else {
+			extractor = h264_extractor;
+			mime = MEDIA_FORMAT_H264_SP;
+		}
+		break;
+	case MEDIACODEC_MPEG4:
+		if (encoder) {
+			extractor = yuv_extractor;
+			mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+		} else {
+			extractor = h264_extractor;
+			mime = MEDIA_FORMAT_MPEG4_SP;
+		}
+		break;
+	case MEDIACODEC_H263:
+		if (encoder) {
+			extractor = yuv_extractor;
+			mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+		} else {
+			extractor = h264_extractor;
+			mime = MEDIA_FORMAT_H263P;
+		}
+		break;
+	case MEDIACODEC_AAC:
+		if (encoder) {
+			extractor = aacenc_extractor;
+			mime = MEDIA_FORMAT_PCM;
+		} else {
+			extractor = aacdec_extractor;
+			mime = MEDIA_FORMAT_AAC;
+		}
+		break;
+	case MEDIACODEC_AAC_HE:
+		if (encoder) {
+			extractor = aacenc_extractor;
+			mime = MEDIA_FORMAT_PCM;
+		} else {
+			/*extractor = aacdec_extractor;*/
+			mime = MEDIA_FORMAT_AAC_HE;
+		}
+		break;
+	case MEDIACODEC_AAC_HE_PS:
+		break;
+	case MEDIACODEC_MP3:
+		extractor = mp3dec_extractor;
+		mime = MEDIA_FORMAT_MP3;
+		break;
+	case MEDIACODEC_VORBIS:
+		break;
+	case MEDIACODEC_FLAC:
+		break;
+	case MEDIACODEC_WMAV1:
+		break;
+	case MEDIACODEC_WMAV2:
+		break;
+	case MEDIACODEC_WMAPRO:
+		break;
+	case MEDIACODEC_WMALSL:
+		break;
+	default:
+		LOGE("NOT SUPPORTED!!!!");
+		break;
 	}
-	//media_format_set_video_mime(vdec_fmt, mime);
 	return mime;
 }
 
@@ -767,20 +757,18 @@ static gboolean read_data(App *app)
 	int stride_width, stride_height;
 
 	g_print("----------read data------------\n");
-	//read = extractor(app, app->data + app->offset, app->length - app->offset );
 	extractor(app, &tmp, &read, &have_frame);
 
-	if ( app->offset >= app->length - 1 ) {
+	if (app->offset >= app->length - 1) {
 		/* EOS */
-		//media_packet_set_flags(in_buf, MEDIA_PACKET_END_OF_STREAM);
 		g_print("EOS\n");
 		app->finish = clock();
-		g_main_loop_quit (app->loop);
+		g_main_loop_quit(app->loop);
 		return FALSE;
 	}
 	g_print("length : %d, offset : %d\n", app->length, app->offset);
 
-	if ( app->offset + len > app->length )
+	if (app->offset + len > app->length)
 		len = app->length - app->offset;
 
 	g_print("%p, %d, have_frame :%d, read: %d\n", tmp, (int)read, have_frame, read);
@@ -801,7 +789,7 @@ static gboolean read_data(App *app)
 			media_packet_set_buffer_size(pkt, (uint64_t)read);
 
 			memcpy(buf_data_ptr, tmp, read);
-			g_print("tmp:%p, read:%d\n",tmp, read);
+			g_print("tmp:%p, read:%d\n", tmp, read);
 		} else {
 			/* Y */
 			media_packet_get_video_plane_data_ptr(pkt, 0, &buf_data_ptr);
@@ -833,12 +821,11 @@ static gboolean read_data(App *app)
 		mc_hex_dump("inbuf", tmp, 48);
 
 		ret = mediacodec_process_input(app->mc_handle[0], pkt, 0);
-		if(ret != MEDIACODEC_ERROR_NONE) {
+		if (ret != MEDIACODEC_ERROR_NONE)
 			return FALSE;
-		}
+
 		pts += ES_DEFAULT_VIDEO_PTS_OFFSET;
 	}
-	//app->offset += read;
 
 	return TRUE;
 }
@@ -846,7 +833,6 @@ static gboolean read_data(App *app)
 static void start_feed(App *app)
 {
 	if (app->sourceid == 0) {
-		//start feeding
 		app->sourceid = g_idle_add((GSourceFunc)read_data, app);
 		g_print("start_feed\n");
 	}
@@ -855,7 +841,6 @@ static void start_feed(App *app)
 static void stop_feed(App *app)
 {
 	if (app->sourceid != 0) {
-		//stop feeding
 		g_source_remove(app->sourceid);
 		app->sourceid = 0;
 		g_print("stop_feed\n");
@@ -881,9 +866,10 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
 	g_mutex_lock(&app->lock);
 
 	ret = mediacodec_get_output(app->mc_handle[0], &out_pkt, 0);
-	if (ret != MEDIACODEC_ERROR_NONE) {
+
+	if (ret != MEDIACODEC_ERROR_NONE)
 		g_print("get_output failed\n");
-	}
+
 	decoder_output_dump(app, out_pkt);
 
 #if DUMP_OUTBUF
@@ -893,7 +879,7 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
 
 	media_packet_get_buffer_data_ptr(out_pkt, &data);
 	media_packet_get_buffer_size(out_pkt, &buf_size);
-	g_print("output data : %p, size %d\n",data, (int)buf_size);
+	g_print("output data : %p, size %d\n", data, (int)buf_size);
 
 	fwrite(data, 1, buf_size, fp_out);
 
@@ -917,11 +903,11 @@ static bool _mediacodec_buffer_status_cb(mediacodec_status_e status, void *user_
 
 	App *app = (App*)user_data;
 
-	if (status == MEDIACODEC_NEED_DATA) {
+	if (status == MEDIACODEC_NEED_DATA)
 		start_feed(app);
-	} else if (status == MEDIACODEC_ENOUGH_DATA ){
+	else if (status == MEDIACODEC_ENOUGH_DATA)
 		stop_feed(app);
-	}
+
 	return TRUE;
 }
 
@@ -964,50 +950,49 @@ static void _mediacodec_prepare(App *app)
 	ret = media_format_create(&vdec_fmt);
 
 	switch (app->type) {
-		case VIDEO_DEC:
-			ret = mediacodec_set_vdec_info(app->mc_handle[0], app->width, app->height);
-			media_format_set_video_mime(vdec_fmt, app->mime);
-			media_format_set_video_width(vdec_fmt, app->width);
-			media_format_set_video_height(vdec_fmt, app->height);
-			break;
-		case VIDEO_ENC:
-			ret = mediacodec_set_venc_info(app->mc_handle[0], app->width, app->height, app->fps, app->target_bits);
-			media_format_set_video_mime(vdec_fmt, app->mime);
-			media_format_set_video_width(vdec_fmt, app->width);
-			media_format_set_video_height(vdec_fmt, app->height);
-			media_format_set_video_avg_bps(vdec_fmt, app->target_bits);
-			break;
-		case AUDIO_DEC:
-			ret = mediacodec_set_adec_info(app->mc_handle[0], app->samplerate, app->channel, app->bit);
-			media_format_set_audio_mime(vdec_fmt, app->mime);
-			media_format_set_audio_channel(vdec_fmt, app->channel);
-			media_format_set_audio_samplerate(vdec_fmt, app->samplerate);
-			media_format_set_audio_bit(vdec_fmt, app->bit);
-			break;
-		case AUDIO_ENC:
-			ret = mediacodec_set_aenc_info(app->mc_handle[0], app->samplerate, app->channel, app->bit, app->bitrate);
-			media_format_set_audio_mime(vdec_fmt, app->mime);
-			media_format_set_audio_channel(vdec_fmt, app->channel);
-			media_format_set_audio_samplerate(vdec_fmt, app->samplerate);
-			media_format_set_audio_bit(vdec_fmt, app->bit);
-			break;
-		default:
-			g_print("invaild type\n");
-			break;
+	case VIDEO_DEC:
+		ret = mediacodec_set_vdec_info(app->mc_handle[0], app->width, app->height);
+		media_format_set_video_mime(vdec_fmt, app->mime);
+		media_format_set_video_width(vdec_fmt, app->width);
+		media_format_set_video_height(vdec_fmt, app->height);
+		break;
+	case VIDEO_ENC:
+		ret = mediacodec_set_venc_info(app->mc_handle[0], app->width, app->height, app->fps, app->target_bits);
+		media_format_set_video_mime(vdec_fmt, app->mime);
+		media_format_set_video_width(vdec_fmt, app->width);
+		media_format_set_video_height(vdec_fmt, app->height);
+		media_format_set_video_avg_bps(vdec_fmt, app->target_bits);
+		break;
+	case AUDIO_DEC:
+		ret = mediacodec_set_adec_info(app->mc_handle[0], app->samplerate, app->channel, app->bit);
+		media_format_set_audio_mime(vdec_fmt, app->mime);
+		media_format_set_audio_channel(vdec_fmt, app->channel);
+		media_format_set_audio_samplerate(vdec_fmt, app->samplerate);
+		media_format_set_audio_bit(vdec_fmt, app->bit);
+		break;
+	case AUDIO_ENC:
+		ret = mediacodec_set_aenc_info(app->mc_handle[0], app->samplerate, app->channel, app->bit, app->bitrate);
+		media_format_set_audio_mime(vdec_fmt, app->mime);
+		media_format_set_audio_channel(vdec_fmt, app->channel);
+		media_format_set_audio_samplerate(vdec_fmt, app->samplerate);
+		media_format_set_audio_bit(vdec_fmt, app->bit);
+		break;
+	default:
+		g_print("invaild type\n");
+		break;
 	}
+
 	if (ret  != MEDIACODEC_ERROR_NONE) {
 		g_print("mediacodec_set_xxxc(%d)_info failed\n", app->type);
 		return;
 	}
 
-
 	/* set callback */
 	mediacodec_set_input_buffer_used_cb(app->mc_handle[0], _mediacodec_inbuf_used_cb, NULL);
 	mediacodec_set_output_buffer_available_cb(app->mc_handle[0], _mediacodec_outbuf_available_cb, app);
 	mediacodec_set_buffer_status_cb(app->mc_handle[0], _mediacodec_buffer_status_cb, app);
-	mediacodec_set_eos_cb(app->mc_handle[0],_mediacodec_eos_cb, NULL);
+	mediacodec_set_eos_cb(app->mc_handle[0], _mediacodec_eos_cb, NULL);
 	mediacodec_set_error_cb(app->mc_handle[0], _mediacodec_error_cb, NULL);
-
 
 	/* prepare */
 	ret = mediacodec_prepare(app->mc_handle[0]);
@@ -1024,71 +1009,31 @@ static void _mediacodec_prepare(App *app)
 
 	g_print("---------------------------\n");
 
-
 	return;
 }
-/**
- *
- *
- * @param filename
- */
 
 static void input_filepath(char *filename, App *app)
 {
 	GError *error = NULL;
 
 	app->obj++;
-	app->file = g_mapped_file_new (filename, FALSE, &error);
+	app->file = g_mapped_file_new(filename, FALSE, &error);
 	if (error) {
-		g_print ("failed to open file : %s\n", error->message);
+		g_print("failed to open file : %s\n", error->message);
 		g_error_free(error);
 		return -1;
 	}
 
-	app->length = g_mapped_file_get_length (app->file);
-	app->data = (guint8 *) g_mapped_file_get_contents (app->file);
+	app->length = g_mapped_file_get_length(app->file);
+	app->data = (guint8 *)g_mapped_file_get_contents(app->file);
 	app->offset = 0;
 	g_print("len : %d, offset : %d, obj : %d", app->length, (int)app->offset, app->obj);
 
-	/*
-	   if ( mediacodec_create(&app->mc_handle[app->obj]) != MEDIACODEC_ERROR_NONE) {
-	   g_print("mediacodec_create failed\n");
-	   }
-	   */
-#if 0
-	if(len < 0 || len > MAX_STRING_LEN)
-		return;
-
-	for(i = 0; i < g_handle_num; i++)
-	{
-		if(g_media_codec[i] != NULL)
-		{
-			mediacodec_unprepare(g_media_codec[i]);
-			mediacodec_destroy(g_media_codec[i]);
-			g_media_codec[i] = NULL;
-		}
-
-		if (mediacodec_create(&g_media_codec[i]) != MEDIACODEC_ERROR_NONE)
-		{
-			g_print("mediacodec create is failed\n");
-		}
-	}
-	//input_fmt = (media_format_s *) malloc(sizeof(media_format_s));
-	//memset(input_fmt, 0, sizeof(media_format_s));
-	media_format_create(&input_fmt);
-
-#if DUMP_OUTBUF
-	fp_out = fopen("/opt/usr/media/codec_dump.out", "wb");
-#endif
-
-	strncpy (g_uri, filename, len);
-#endif
 	return;
 }
 
 void quit_program()
 {
-	//g_main_loop_quit (app->loop);
 #if DUMP_OUTBUF
 	if (fp_out)
 		fclose(fp_out);
@@ -1105,46 +1050,32 @@ void reset_menu_state()
 void _interpret_main_menu(char *cmd, App *app)
 {
 	int len =  strlen(cmd);
-	if (len == 1)
-	{
-		if (strncmp(cmd, "a", 1) == 0) {
+	if (len == 1) {
+		if (strncmp(cmd, "a", 1) == 0)
 			g_menu_state = CURRENT_STATUS_FILENAME;
-		} else if (strncmp(cmd, "o", 1) == 0) {
+		else if (strncmp(cmd, "o", 1) == 0)
 			g_menu_state = CURRENT_STATUS_GET_OUTPUT;
-		} else if (strncmp(cmd, "q", 1) == 0)
-		{
+		else if (strncmp(cmd, "q", 1) == 0)
 			quit_program();
-			//g_main_loop_quit (app->loop);
-		} else {
+		else
 			g_print("unknown menu \n");
-		}
 	} else if (len == 2) {
-		if (strncmp(cmd, "pr", 2) == 0) {
+		if (strncmp(cmd, "pr", 2) == 0)
 			_mediacodec_prepare(app);
-		} else if (strncmp(cmd, "sc", 2) == 0) {
+		else if (strncmp(cmd, "sc", 2) == 0)
 			g_menu_state = CURRENT_STATUS_SET_CODEC;
-		} else if (strncmp(cmd, "vd", 2) == 0) {
+		else if (strncmp(cmd, "vd", 2) == 0)
 			g_menu_state = CURRENT_STATUS_SET_VDEC_INFO;
-		} else if (strncmp(cmd, "ve", 2) == 0) {
+		else if (strncmp(cmd, "ve", 2) == 0)
 			g_menu_state = CURRENT_STATUS_SET_VENC_INFO;
-		} else if (strncmp(cmd, "ad", 2) == 0) {
+		else if (strncmp(cmd, "ad", 2) == 0)
 			g_menu_state = CURRENT_STATUS_SET_ADEC_INFO;
-		} else if (strncmp(cmd, "ae", 2) == 0) {
+		else if (strncmp(cmd, "ae", 2) == 0)
 			g_menu_state = CURRENT_STATUS_SET_AENC_INFO;
-		} else if (strncmp(cmd, "pi", 2) == 0) {
+		else if (strncmp(cmd, "pi", 2) == 0)
 			g_menu_state = CURRENT_STATUS_PROCESS_INPUT;
-		} else if (strncmp(cmd, "rb", 2) == 0) {
-			//_mediacodec_reset_output_buffer();
-		} else if (strncmp(cmd, "pa", 2) == 0) {
-			//_mediacodec_process_all();
-		} else if (strncmp(cmd, "un", 2) == 0) {
-			//_mediacodec_unprepare();
-		} else if (strncmp(cmd, "dt", 2) == 0) {
-			//_mediacodec_destroy();
-		} else {
-			//g_print("unknown menu \n");
+		else
 			display_sub_basic();
-		}
 	} else {
 		g_print("unknown menu \n");
 	}
@@ -1154,16 +1085,11 @@ void _interpret_main_menu(char *cmd, App *app)
 
 static void displaymenu(void)
 {
-	if (g_menu_state == CURRENT_STATUS_MAINMENU)
-	{
+	if (g_menu_state == CURRENT_STATUS_MAINMENU) {
 		display_sub_basic();
-	}
-	else if (g_menu_state == CURRENT_STATUS_FILENAME)
-	{
+	} else if (g_menu_state == CURRENT_STATUS_FILENAME) {
 		g_print("*** input mediapath.\n");
-	}
-	else if (g_menu_state == CURRENT_STATUS_SET_CODEC)
-	{
+	} else if (g_menu_state == CURRENT_STATUS_SET_CODEC) {
 		g_print("*** Codec id : Select Codec ID Numbe  (e.g. AAC_LC = 96)\n");
 		g_print("               L16    =  16 (0x10)\n");
 		g_print("               ALAW   =  32 (0x20)\n");
@@ -1194,35 +1120,20 @@ static void displaymenu(void)
 		g_print("               CODEC : ENCODER =  1       DECODER =  2\n");
 		g_print("               TYPE  : HW      =  4       SW      =  8\n");
 		g_print("*** input codec id, falgs.\n");
-	}
-	else if (g_menu_state == CURRENT_STATUS_SET_VDEC_INFO)
-	{
+	} else if (g_menu_state == CURRENT_STATUS_SET_VDEC_INFO) {
 		g_print("*** input video decode configure.(width, height)\n");
-	}
-	else if (g_menu_state == CURRENT_STATUS_SET_VENC_INFO)
-	{
+	} else if (g_menu_state == CURRENT_STATUS_SET_VENC_INFO) {
 		g_print("*** input video encode configure.(width, height, fps, target_bits)\n");
-	}
-	else if (g_menu_state == CURRENT_STATUS_SET_ADEC_INFO)
-	{
+	} else if (g_menu_state == CURRENT_STATUS_SET_ADEC_INFO) {
 		g_print("*** input audio decode configure.(samplerate, channel, bit (e.g. 48000,  2, 16))\n");
-	}
-	else if (g_menu_state == CURRENT_STATUS_SET_AENC_INFO)
-	{
+	} else if (g_menu_state == CURRENT_STATUS_SET_AENC_INFO) {
 		g_print("*** input audio encode configure.(samplerate, channel, bit, bitrate (e.g. 48000,  2, 16, 128000))\n");
-	}
-	else if (g_menu_state == CURRENT_STATUS_PROCESS_INPUT)
-	{
+	} else if (g_menu_state == CURRENT_STATUS_PROCESS_INPUT) {
 		g_print("*** input dec process number\n");
-	}
-	else if (g_menu_state == CURRENT_STATUS_GET_OUTPUT)
-	{
+	} else if (g_menu_state == CURRENT_STATUS_GET_OUTPUT) {
 		g_print("*** input get output buffer number\n");
-	}
-	else
-	{
+	} else {
 		g_print("*** unknown status.\n");
-		//quit_program(app);
 	}
 	g_print(" >>> ");
 }
@@ -1234,170 +1145,163 @@ gboolean timeout_menu_display(void* data)
 }
 
 
-static void interpret (char *cmd, App *app)
+static void interpret(char *cmd, App *app)
 {
-	switch (g_menu_state)
+	switch (g_menu_state) {
+	case CURRENT_STATUS_MAINMENU:
+		_interpret_main_menu(cmd, app);
+		break;
+	case CURRENT_STATUS_FILENAME:
+		input_filepath(cmd, app);
+		reset_menu_state();
+		break;
+	case CURRENT_STATUS_SET_CODEC:
 	{
-		case CURRENT_STATUS_MAINMENU:
-			{
-				_interpret_main_menu(cmd, app);
-			}
-			break;
-		case CURRENT_STATUS_FILENAME:
-			{
-				input_filepath(cmd, app);
-				reset_menu_state();
-			}
-			break;
-		case CURRENT_STATUS_SET_CODEC:
-			{
-				int tmp;
-				static int cnt = 0;
-				char **ptr = NULL;
-				switch (cnt)
-				{
-					case 0:
-						tmp = atoi(cmd);
+		int tmp;
+		static int cnt = 0;
+		char **ptr = NULL;
+		switch (cnt) {
+		case 0:
+			tmp = atoi(cmd);
 
-						if(tmp > 100 &&
-								(tmp != 112) &&
-								(tmp != 128) &&
-								(tmp != 144) &&
-								(tmp != 160) && (tmp != 161) && (tmp != 162) && (tmp != 163))     //Temporary
-						{
-							tmp = strtol(cmd, ptr, 16);
-							app->codecid = 0x2000 + ((tmp & 0xFF) << 4);
-						} else {
-							app->codecid = 0x1000 + tmp;
-						}
-						cnt++;
-						break;
-					case 1:
-						app->flag = atoi(cmd);
-						cnt = 0;
-						reset_menu_state();
-						break;
-					default:
-						break;
-				}
-			}
+			if (tmp > 100 &&
+				(tmp != 112) &&
+				(tmp != 128) &&
+				(tmp != 144) &&
+				(tmp != 160) && (tmp != 161) && (tmp != 162) && (tmp != 163)) {
+					tmp = strtol(cmd, ptr, 16);
+					app->codecid = 0x2000 + ((tmp & 0xFF) << 4);
+			} else
+				app->codecid = 0x1000 + tmp;
+
+			cnt++;
 			break;
-		case CURRENT_STATUS_SET_VDEC_INFO:
-			{
-				static int cnt = 0;
-				switch (cnt)
-				{
-					case 0:
-						app->width = atoi(cmd);
-						cnt++;
-						break;
-					case 1:
-						app->height = atoi(cmd);
-						app->type = VIDEO_DEC;
-
-						reset_menu_state();
-						cnt = 0;
-						break;
-					default:
-						break;
-				}
-			}break;
-		case CURRENT_STATUS_SET_VENC_INFO:
-			{
-				static int cnt = 0;
-				switch (cnt) {
-					case 0:
-						app->width = atoi(cmd);
-						cnt++;
-						break;
-					case 1:
-						app->height = atoi(cmd);
-						cnt++;
-						break;
-					case 2:
-						app->fps = atol(cmd);
-						cnt++;
-						break;
-					case 3:
-						app->target_bits = atoi(cmd);
-						app->type = VIDEO_ENC;
-
-						reset_menu_state();
-						cnt = 0;
-						break;
-					default:
-						break;
-				}
-			}
-			break;
-		case CURRENT_STATUS_SET_ADEC_INFO:
-			{
-				static int cnt = 0;
-				switch (cnt)
-				{
-					case 0:
-						app->samplerate = atoi(cmd);
-						cnt++;
-						break;
-					case 1:
-						app->channel = atoi(cmd);
-						cnt++;
-						break;
-					case 2:
-						app->bit = atoi(cmd);
-						app->type = AUDIO_DEC;
-
-						reset_menu_state();
-						cnt = 0;
-						break;
-					default:
-						break;
-				}
-			}break;
-		case CURRENT_STATUS_SET_AENC_INFO:
-			{
-				static int cnt = 0;
-				switch (cnt)
-				{
-					case 0:
-						app->samplerate = atoi(cmd);
-						cnt++;
-						break;
-					case 1:
-						app->channel = atoi(cmd);
-						cnt++;
-						break;
-					case 2:
-						app->bit = atoi(cmd);
-						cnt++;
-						break;
-					case 3:
-						app->bitrate = atoi(cmd);
-						app->type = AUDIO_ENC;
-
-						reset_menu_state();
-						cnt = 0;
-						break;
-					default:
-						break;
-				}
-			}break;
-		case CURRENT_STATUS_PROCESS_INPUT:
-			{
-				static int num = 0;
-				num = atoi(cmd);
-				reset_menu_state();
-			}
-			break;
-		case CURRENT_STATUS_GET_OUTPUT:
-			{
-				static int num = 0;
-				num = atoi(cmd);
-				reset_menu_state();
-			}
+		case 1:
+			app->flag = atoi(cmd);
+			cnt = 0;
+			reset_menu_state();
 			break;
 		default:
 			break;
+		}
+	}
+	break;
+	case CURRENT_STATUS_SET_VDEC_INFO:
+	{
+		static int cnt = 0;
+		switch (cnt) {
+		case 0:
+			app->width = atoi(cmd);
+			cnt++;
+			break;
+		case 1:
+			app->height = atoi(cmd);
+			app->type = VIDEO_DEC;
+
+			reset_menu_state();
+			cnt = 0;
+			break;
+		default:
+			break;
+		}
+	}
+	break;
+	case CURRENT_STATUS_SET_VENC_INFO:
+	{
+		static int cnt = 0;
+		switch (cnt) {
+		case 0:
+			app->width = atoi(cmd);
+			cnt++;
+			break;
+		case 1:
+			app->height = atoi(cmd);
+			cnt++;
+			break;
+		case 2:
+			app->fps = atol(cmd);
+			cnt++;
+			break;
+		case 3:
+			app->target_bits = atoi(cmd);
+			app->type = VIDEO_ENC;
+
+			reset_menu_state();
+			cnt = 0;
+			break;
+		default:
+			break;
+		}
+	}
+	break;
+	case CURRENT_STATUS_SET_ADEC_INFO:
+	{
+		static int cnt = 0;
+		switch (cnt) {
+		case 0:
+			app->samplerate = atoi(cmd);
+			cnt++;
+			break;
+		case 1:
+			app->channel = atoi(cmd);
+			cnt++;
+			break;
+		case 2:
+			app->bit = atoi(cmd);
+			app->type = AUDIO_DEC;
+
+			reset_menu_state();
+			cnt = 0;
+			break;
+		default:
+			break;
+		}
+	}
+	break;
+	case CURRENT_STATUS_SET_AENC_INFO:
+	{
+		static int cnt = 0;
+		switch (cnt) {
+		case 0:
+			app->samplerate = atoi(cmd);
+			cnt++;
+			break;
+		case 1:
+			app->channel = atoi(cmd);
+			cnt++;
+			break;
+		case 2:
+			app->bit = atoi(cmd);
+			cnt++;
+			break;
+		case 3:
+			app->bitrate = atoi(cmd);
+			app->type = AUDIO_ENC;
+
+			reset_menu_state();
+			cnt = 0;
+			break;
+		default:
+			break;
+		}
+	}
+	break;
+	case CURRENT_STATUS_PROCESS_INPUT:
+	{
+		static int num = 0;
+		num = atoi(cmd);
+		reset_menu_state();
+	}
+	break;
+	case CURRENT_STATUS_GET_OUTPUT:
+	{
+		static int num = 0;
+		num = atoi(cmd);
+		reset_menu_state();
+	}
+	break;
+	default:
+		break;
 	}
 
 	g_timeout_add(100, timeout_menu_display, 0);
