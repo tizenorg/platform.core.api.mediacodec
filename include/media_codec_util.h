@@ -51,9 +51,6 @@ struct _mc_sem_t
     int counter;
 };
 
-void *mc_aligned_malloc(int size, int alignment);
-void mc_aligned_free(void *mem);
-
 mc_sem_t *mc_sem_new();
 void mc_sem_free(mc_sem_t *sem);
 void mc_sem_down(mc_sem_t *sem);
