@@ -31,7 +31,6 @@ static gboolean __mediacodec_eos_cb(void *user_data);
 static gboolean __mediacodec_supported_codec_cb(mediacodec_codec_type_e codec_type, void *user_data);
 static gboolean __mediacodec_buffer_status_cb(mediacodec_status_e status, void *user_data);
 
-
 /*
  * Internal Implementation
  */
@@ -563,4 +562,3 @@ static gboolean __mediacodec_buffer_status_cb(mediacodec_status_e status, void *
 
 	return 1;
 }
-

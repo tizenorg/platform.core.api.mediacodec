@@ -45,6 +45,9 @@
 #define DEFAULT_SW_ENCODER_MIME ""
 #define DEFAULT_SW_ENCODER_FORMAT ""
 
+
+#define CNAME_SIZE 512
+
 typedef struct {
 	gchar cname[MEDIA_CODEC_INI_MAX_STRLEN];
 	mediacodec_codec_type_e ctype;
@@ -90,9 +93,9 @@ do {\
 	if (str &&  \
 			(strlen(str) > 0) && \
 			(strlen(str) < MEDIA_CODEC_INI_MAX_STRLEN)) \
-		strcpy(x_item, str); \
+		strncpy(x_item, str, strlen(str) + 1); \
 	else \
-		strcpy(x_item, x_default); \
+		strncpy(x_item, x_default, strlen(x_default) + 1); \
 } while (0)
 
 #define MEDIA_CODEC_INI_GET_STRING_FROM_LIST(x_dict, x_list, x_ini, x_default) \
@@ -295,7 +298,7 @@ endf:
 
 int mc_ini_load(mc_ini_t *ini)
 {
-	gchar cname[256];
+	gchar cname[CNAME_SIZE];
 	int i = 0;
 	dictionary *dict = NULL;
 
@@ -330,24 +333,24 @@ int mc_ini_load(mc_ini_t *ini)
 		MEDIA_CODEC_INI_GET_STRING(dict, ini->port_name, "port_in_use:media_codec_port", DEFAULT_PORT);
 		/* codec */
 		for (i = 0; i < codec_list; i++) {
-			memset(cname, 0x00, 256);
-			strcpy(cname, general_codec_list[i].cname);
+			memset(cname, 0x00, CNAME_SIZE);
+			snprintf(cname, CNAME_SIZE, "%s", general_codec_list[i].cname);
 			int len = strlen(cname);
 			ini->codec[i].codec_id =  general_codec_list[i].ctype;
-			sprintf(cname+len, "%s", ":hw_decoder");
+			snprintf(cname+len, CNAME_SIZE - len, "%s", ":hw_decoder");
 			MEDIA_CODEC_INI_GET_STRING_FROM_LIST(dict, ini->codec[i].codec_info[0], cname, DEFAULT_VALUE);
-			sprintf(cname+len, "%s", ":hw_encoder");
+			snprintf(cname+len, CNAME_SIZE - len, "%s", ":hw_encoder");
 			MEDIA_CODEC_INI_GET_STRING_FROM_LIST(dict, ini->codec[i].codec_info[1], cname, DEFAULT_VALUE);
-			sprintf(cname+len, "%s", ":sw_decoder");
+			snprintf(cname+len, CNAME_SIZE - len, "%s", ":sw_decoder");
 			MEDIA_CODEC_INI_GET_STRING_FROM_LIST(dict, ini->codec[i].codec_info[2], cname, DEFAULT_VALUE);
-			sprintf(cname+len, "%s", ":sw_encoder");
+			snprintf(cname+len, CNAME_SIZE - len, "%s", ":sw_encoder");
 			MEDIA_CODEC_INI_GET_STRING_FROM_LIST(dict, ini->codec[i].codec_info[3], cname, DEFAULT_VALUE);
 		}
 	} else {/* if dict is not available just fill the structure with default value */
 
 		LOGW("failed to load ini. using hardcoded default\n");
 		/* general */
-		strncpy(ini->port_name, DEFAULT_PORT, MEDIA_CODEC_INI_MAX_STRLEN - 1);
+		snprintf(ini->port_name, sizeof(ini->port_name), "%s", DEFAULT_PORT);
 		for (i = 0; i < codec_list; i++) {
 			MEDIA_CODEC_GET_DEFAULT_LIST(ini->codec[i].codec_info[0].name,   DEFAULT_HW_DECODER_NAME);
 			MEDIA_CODEC_GET_DEFAULT_LIST(ini->codec[i].codec_info[0].mime,   DEFAULT_HW_DECODER_MIME);
@@ -371,23 +374,25 @@ int mc_ini_load(mc_ini_t *ini)
 		ini->port_type = GST_PORT;
 	else {
 		LOGE("Invalid port is set to [%s] [%d]\n", ini->port_name, ini->port_type);
+		iniparser_freedict(dict);
 		goto ERROR;
 	}
 	LOGD("The port is set to [%s] [%d]\n", ini->port_name, ini->port_type);
 
-	for (i = 0; i < codec_list; i++) {
-		memset(cname, 0x00, 256);
-		strcpy(cname, general_codec_list[i].cname);
+    for (i = 0;i < codec_list; i++) {
+		memset(cname, 0x00, CNAME_SIZE);
+		snprintf(cname, CNAME_SIZE, "%s", general_codec_list[i].cname);
 		int len = strlen(cname);
-		sprintf(cname+len, "%s", ":hw_decoder");
-		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[0], cname);
-		sprintf(cname+len, "%s", ":hw_encoder");
-		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[1], cname);
-		sprintf(cname+len, "%s", ":sw_decoder");
-		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[2], cname);
-		sprintf(cname+len, "%s", ":sw_encoder");
-		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[3], cname);
-	}
+
+		snprintf(cname+len, CNAME_SIZE-len, "%s",":hw_decoder");
+		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[0],cname);
+		snprintf(cname+len, CNAME_SIZE-len, "%s",":hw_encoder");
+		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[1],cname);
+		snprintf(cname+len, CNAME_SIZE-len, "%s",":sw_decoder");
+		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[2],cname);
+		snprintf(cname+len, CNAME_SIZE-len, "%s",":sw_encoder");
+		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[3],cname);
+    }
 
 	/* free dict as we got our own structure */
 	iniparser_freedict(dict);

@@ -6,7 +6,7 @@ INCLUDE_DIRECTORIES(../include/headers)
 link_directories(${CMAKE_SOURCE_DIR}/../)
 
 INCLUDE(FindPkgConfig)
-pkg_check_modules(${fw_test} REQUIRED appcore-efl)
+pkg_check_modules(${fw_test} REQUIRED appcore-efl elementary)
 FOREACH(flag ${${fw_test}_CFLAGS})
     SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
 ENDFOREACH(flag)
