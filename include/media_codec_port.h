@@ -110,13 +110,6 @@ typedef void (*mc_eos_cb)(void *user_data);
 typedef void (*mc_buffer_status_cb)(mediacodec_status_e status, void *user_data);
 typedef void (*mc_supported_codec_cb)(mediacodec_codec_type_e codec_type, void *user_data);
 
-int (*mc_sniff_bitstream)(mc_handle_t *handle, media_packet_h pkt);
-
-int mc_sniff_h264_bitstream(mc_handle_t *handle, media_packet_h pkt);
-int mc_sniff_mpeg4_bitstream(mc_handle_t *handle, media_packet_h pkt);
-int mc_sniff_h263_bitstream(mc_handle_t *handle, media_packet_h pkt);
-int mc_sniff_yuv(mc_handle_t *handle, media_packet_h pkt);
-
 typedef enum {
     _MEDIACODEC_EVENT_TYPE_COMPLETE,
     _MEDIACODEC_EVENT_TYPE_EMPTYBUFFER,

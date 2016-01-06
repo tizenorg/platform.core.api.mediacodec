@@ -30,6 +30,7 @@ static gboolean __mediacodec_error_cb(mediacodec_error_e error, void *user_data)
 static gboolean __mediacodec_eos_cb(void *user_data);
 static gboolean __mediacodec_supported_codec_cb(mediacodec_codec_type_e codec_type, void *user_data);
 static gboolean __mediacodec_buffer_status_cb(mediacodec_status_e status, void *user_data);
+static const gchar * _mc_state_to_string(mediacodec_state_e state);
 
 
 /*
@@ -562,5 +563,24 @@ static gboolean __mediacodec_buffer_status_cb(mediacodec_status_e status, void *
 		((mediacodec_buffer_status_cb)handle->buffer_status_cb)(status, handle->buffer_status_cb_userdata);
 
 	return 1;
+}
+
+const gchar * _mc_state_to_string(mediacodec_state_e state)
+{
+	guint state_u = (guint) state;
+
+	switch (state_u) {
+	case MEDIACODEC_STATE_NONE:
+		return "None state";
+	case MEDIACODEC_STATE_IDLE:
+		return "Idle state";
+	case MEDIACODEC_STATE_READY:
+		return "Ready state";
+	case MEDIACODEC_STATE_EXCUTE:
+		return "Excute state";
+	default:
+		return "Unknown state";
+
+	}
 }
 

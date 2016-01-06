@@ -52,6 +52,7 @@
 #define CHECK_VALID_PACKET(state, expected_state) \
 	((state & (expected_state)) == (expected_state))
 
+#define AAC_CODECDATA_SIZE    16
 static int samplerate = DEFAULT_SAMPPLERATE;
 static int channel = DEFAULT_CHANNEL;
 static int bit = DEFAULT_BIT;
@@ -330,6 +331,170 @@ DONE:
 	app->offset += read;
 }
 
+void h263_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
+{
+	int len = 0;
+	size_t result;
+	int read_size = 1, state = 1, bStart = 0;
+	unsigned char val;
+	unsigned char *pH263 = app->data + app->offset;
+	*data = pH263;
+	int max = app->length - app->offset;
+	*have_frame = TRUE;
+
+	while (1) {
+		if (len >= max) {
+			read_size = (len - 1);
+			*have_frame = FALSE;
+			goto DONE;
+		}
+		val = pH263[len++];
+		switch (state) {
+		case 1:
+			if (val == 0x00)
+				state++;
+			break;
+		case 2:
+			if (val == 0x00)
+				state++;
+			else
+				state = 1;
+			break;
+		case 3:
+			state = 1;
+			if ((val & 0xFC) == 0x80) {
+				if (bStart) {
+					read_size = len - 3;
+					goto DONE;
+				} else {
+					bStart = 1;
+				}
+			}
+			break;
+		}
+	}
+ DONE:
+	*size = read_size;
+	app->offset += read_size;
+}
+
+void mpeg4_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
+{
+	int static temp;
+	int len = 0;
+	int result;
+	int read_size = 1, state = 1, bType = 0, bStart = 0;
+	unsigned char val;
+	unsigned char *pMpeg4 = app->data + app->offset;
+	*data = pMpeg4;
+	int max = app->length - app->offset;
+
+	while (1) {
+		if (len >= max) {
+			read_size = (len - 1);
+			*have_frame = FALSE;
+			goto DONE;
+		}
+
+		val = pMpeg4[len++];
+
+		switch (state) {
+		case 1:
+			if (val == 0x00)
+				state++;
+			break;
+		case 2:
+			if (val == 0x00)
+				state++;
+			else
+				state = 1;
+			break;
+		case 3:
+			if (val == 0x01) {
+				state++;
+			} else
+				state = 1;
+			break;
+		case 4:
+			state = 1;
+			if (val == 0xB0 || val == 0xB6) {
+				if (bType == 0xB6) {
+					result = len - 4;
+					goto DONE;
+				}
+				if (!bType) {
+					if (have_frame && val == 0xB0)
+						*have_frame = TRUE;
+				}
+				bType = val;
+			}
+			break;
+		}
+	}
+ DONE:
+	*size = result;
+	app->offset += result;
+	*have_frame = TRUE;
+}
+
+/**
+  * Extract Input data for AMR-NB/WB decoder
+  *  - AMR-NB  : mime type ("audio/AMR")          /   8Khz / 1 ch / 16 bits
+  *  - AMR-WB : mime type ("audio/AMR-WB")  / 16Khz / 1 ch / 16 bits
+  **/
+static const char AMR_header[] = "#!AMR\n";
+static const char AMRWB_header[] = "#!AMR-WB\n";
+#define AMR_NB_MIME_HDR_SIZE          6
+#define AMR_WB_MIME_HDR_SIZE          9
+static const int block_size_nb[16] = { 12, 13, 15, 17, 19, 20, 26, 31, 5, 0, 0, 0, 0, 0, 0, 0 };
+static const int block_size_wb[16] = { 17, 23, 32, 36, 40, 46, 50, 58, 60, 5, -1, -1, -1, -1, 0, 0 };
+
+int *blocksize_tbl;
+void amrdec_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
+{
+	int readsize = 0, mode_temp;
+	size_t result;
+	unsigned int mime_size = AMR_NB_MIME_HDR_SIZE;
+	unsigned int fsize, mode;
+	unsigned char *pAmr = app->data + app->offset;
+	int max = app->length - app->offset;
+	//change the below one to frame count
+	if (app->offset == 0) {
+		if (!memcmp(pAmr, AMR_header, AMR_NB_MIME_HDR_SIZE)) {
+			blocksize_tbl = (int *)block_size_nb;
+			mode_temp = pAmr[AMR_NB_MIME_HDR_SIZE];
+			pAmr = pAmr + AMR_NB_MIME_HDR_SIZE;
+			app->offset += AMR_NB_MIME_HDR_SIZE;
+		} else {
+			if (!memcmp(pAmr, AMRWB_header, AMR_WB_MIME_HDR_SIZE)) {
+				mime_size = AMR_WB_MIME_HDR_SIZE;
+				blocksize_tbl = (int *)block_size_wb;
+				mode_temp = pAmr[AMR_WB_MIME_HDR_SIZE];
+				pAmr = pAmr + AMR_WB_MIME_HDR_SIZE;
+				app->offset += AMR_WB_MIME_HDR_SIZE;
+			} else {
+				g_print("[ERROR] AMR-NB/WB don't detected..\n");
+				return 0;
+			}
+		}
+	}
+	mode_temp = pAmr[0];
+	if ((mode_temp & 0x83) == 0) {
+		mode = (mode_temp >> 3) & 0x0F;	/* Yep. Retrieve the frame size */
+		fsize = blocksize_tbl[mode];
+		readsize = fsize + 1;
+	} else {
+		readsize = 0;
+		g_print("[FAIL] Not found amr frame sync.....\n");
+	}
+
+ DONE:
+	*size = readsize;
+	app->offset += readsize;
+	*data = pAmr;
+	*have_frame = TRUE;
+}
+
 void nv12_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 {
 	int yuv_size;
@@ -529,25 +694,25 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 
 	app->offset += *size;
 }
-#if 0
-void extract_input_aacdec_m4a_test(App *app, unsigned char* data, int *size, bool *have_frame)
+
+#if 1
+void extract_input_aacdec_m4a_test(App * app, unsigned char **data, int *size, bool * have_frame)
 {
-	int readsize = 0;
+	int readsize = 0, read_size = 0;
 	size_t result;
 	unsigned int header_size = ADTS_HEADER_SIZE;
 	unsigned char buffer[1000000];
-	unsigned char codecdata[AAC_CODECDATA_SIZE] = {0,};
-
+	unsigned char codecdata[AAC_CODECDATA_SIZE] = { 0, };
+	int offset = app->length - app->offset;
+	unsigned char *pData = app->data + app->offset;
 	/*
 	 * It is not support full parsing MP4 container box.
 	 * So It MUST start as RAW valid frame sequence.
 	 * Testsuit that are not guaranteed to be available on functionality of all General DEMUXER/PARSER.
 	 */
 
-	if (feof(fd))
-		return 0;
-
-	if (frame_count == 0) {
+	//change the below one later
+	if (app->offset == 0) {
 		/*
 		 * CAUTION : Codec data is needed only once  in first time
 		 * Codec data is made(or extracted) by MP4 demuxer in 'esds' box.
@@ -595,38 +760,38 @@ void extract_input_aacdec_m4a_test(App *app, unsigned char* data, int *size, boo
 		codecdata[6] = 0x80;
 #endif
 
-		memcpy(aacdata, codecdata, AAC_CODECDATA_SIZE);
-
-		result = fread(buffer, 1, header_size, fd);   /* adts header */
-		if (result != header_size)
-			return -1;
-
-		if ((buffer != NULL) && (buffer[0] == 0xff) && ((buffer[1] & 0xf6) == 0xf0)) {
-			readsize = ((buffer[3] & 0x03) << 11) | (buffer[4] << 3) | ((buffer[5] & 0xe0) >> 5);
-			readsize = readsize -header_size;
-			result = fread(buffer, 1, readsize, fd);    /* Make only RAW data, so exclude header 7 bytes */
-			memcpy(aacdata+AAC_CODECDATA_SIZE, buffer, readsize);
+		memcpy(buffer, codecdata, AAC_CODECDATA_SIZE);
+		if ((pData != NULL) && (pData[0] == 0xff) && ((pData[1] & 0xf6) == 0xf0)) {
+			read_size = ((pData[3] & 0x03) << 11) | (pData[4] << 3) | ((pData[5] & 0xe0) >> 5);
+		} else {
+			read_size = 0;
+			g_print("[FAIL] Not found aac frame sync.....\n");
 		}
-
-		g_print("[example] Insert 'codec_data' in 1st frame buffer size (%d)\n", readsize+AAC_CODECDATA_SIZE);
-		return (readsize + AAC_CODECDATA_SIZE);           /* return combination of (codec_data + raw_data) */
+		readsize = read_size - header_size;
+		memcpy(buffer + AAC_CODECDATA_SIZE, pData + 7, readsize);
+		read_size = readsize + AAC_CODECDATA_SIZE;	//return combination of (codec_data + raw_data)
+		app->offset += header_size + readsize;
+		goto DONE;
 	}
 
-	result = fread(buffer, 1, header_size, fd);   /* adts header */
-	if (result != header_size)
-		exit(1);
+	if ((pData != NULL) && (pData[0] == 0xff) && ((pData[1] & 0xf6) == 0xf0)) {
+		read_size = ((pData[3] & 0x03) << 11) | (pData[4] << 3) | ((pData[5] & 0xe0) >> 5);
+		readsize = read_size - header_size;
+		memcpy(buffer, pData + 7, readsize);	//Make only RAW data, so exclude header 7 bytes
+		read_size = readsize;
+		app->offset += header_size + readsize;
 
-	if ((buffer != NULL) && (buffer[0] == 0xff) && ((buffer[1] & 0xf6) == 0xf0)) {
-		readsize = ((buffer[3] & 0x03) << 11) | (buffer[4] << 3) | ((buffer[5] & 0xe0) >> 5);
-		readsize = readsize -header_size;
-		result = fread(buffer, 1, readsize, fd);    /* Make only RAW data, so exclude header 7 bytes */
-		memcpy(aacdata, buffer, readsize);
 	} else {
-		readsize = 0;
-		g_print("[FAIL] Not found aac frame sync.....\n");
+		read_size = 0;
+		g_print("[FAIL] Not found aac frame sync. \n");
 	}
-
-	return readsize;            /* return only raw_data */
+ DONE:
+	*data = buffer;
+	*have_frame = TRUE;
+	if (read_size >= offset)
+		*size = offset;
+	else
+		*size = read_size;
 }
 #endif
 
@@ -686,16 +851,16 @@ int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
 			extractor = yuv_extractor;
 			mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
 		} else {
-			extractor = h264_extractor;
+			extractor = mpeg4_extractor;
 			mime = MEDIA_FORMAT_MPEG4_SP;
 		}
 		break;
 	case MEDIACODEC_H263:
 		if (encoder) {
-			extractor = yuv_extractor;
+			extractor = h263_extractor;
 			mime = *hardware ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
 		} else {
-			extractor = h264_extractor;
+			extractor = h263_extractor;
 			mime = MEDIA_FORMAT_H263P;
 		}
 		break;
@@ -713,7 +878,7 @@ int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
 			extractor = aacenc_extractor;
 			mime = MEDIA_FORMAT_PCM;
 		} else {
-			/*extractor = aacdec_extractor;*/
+			extractor = extract_input_aacdec_m4a_test;
 			mime = MEDIA_FORMAT_AAC_HE;
 		}
 		break;
@@ -734,6 +899,14 @@ int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
 	case MEDIACODEC_WMAPRO:
 		break;
 	case MEDIACODEC_WMALSL:
+		break;
+	case MEDIACODEC_AMR_NB:
+		extractor = amrdec_extractor;
+		mime = MEDIA_FORMAT_AMR_NB;
+		break;
+	case MEDIACODEC_AMR_WB:
+		extractor = amrdec_extractor;
+		mime = MEDIA_FORMAT_AMR_WB;
 		break;
 	default:
 		LOGE("NOT SUPPORTED!!!!");
@@ -870,11 +1043,11 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
 	if (ret != MEDIACODEC_ERROR_NONE)
 		g_print("get_output failed\n");
 
-	decoder_output_dump(app, out_pkt);
+	//decoder_output_dump(app, out_pkt);
 
 #if DUMP_OUTBUF
 	void *data;
-	uint64_t buf_size;
+	int buf_size;
 	int stride_width, stride_height;
 
 	media_packet_get_buffer_data_ptr(out_pkt, &data);
@@ -1038,6 +1211,7 @@ void quit_program()
 	if (fp_out)
 		fclose(fp_out);
 #endif
+		elm_exit();
 
 }
 
@@ -1419,6 +1593,7 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
 	media_packet_get_video_plane_data_ptr(pkt, 0, &temp);
 	media_packet_get_video_stride_width(pkt, 0, &stride_width);
 	media_packet_get_video_stride_height(pkt, 0, &stride_height);
+	g_printf("stride : %d, %d\n", stride_width, stride_height);
 
 	for (i = 0; i < app->height; i++) {
 		ret = fwrite(temp, app->width, 1, fp);

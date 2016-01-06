@@ -66,6 +66,7 @@ static gint __gst_transform_gsterror(mc_gst_core_t *core, GstMessage *message, G
 static gint __gst_handle_resource_error(mc_gst_core_t *core, int code);
 static gint __gst_handle_library_error(mc_gst_core_t *core, int code);
 static gint __gst_handle_core_error(mc_gst_core_t *core, int code);
+static const gchar * _mc_error_to_string(mc_ret_e err);
 
 static int _mc_link_vtable(mc_gst_core_t *core, mediacodec_codec_type_e id, gboolean is_encoder, gboolean is_hw);
 #ifdef TIZEN_PROFILE_LITE
@@ -220,7 +221,7 @@ int __mc_fill_inbuf_with_mm_video_buffer(mc_gst_core_t *core, media_packet_h pkt
 		gst_buffer_prepend_memory(mc_buffer->buffer,
 				gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, buf_data, buf_size, 0,
 					buf_size, mc_buffer, (GDestroyNotify)gst_mediacodec_buffer_finalize));
-		LOGD("packet data is apended, %d, %d", buf_size, gst_buffer_n_memory(mc_buffer->buffer));
+		LOGD("packet data apended, %d, %d", buf_size, gst_buffer_n_memory(mc_buffer->buffer));
 	}
 	return ret;
 }
@@ -247,7 +248,7 @@ int __mc_fill_inbuf_with_packet(mc_gst_core_t *core, media_packet_h pkt, GstMCBu
 		gst_buffer_append_memory(mc_buffer->buffer,
 				gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, buf_data, buf_size, 0,
 					buf_size, mc_buffer, (GDestroyNotify)gst_mediacodec_buffer_finalize));
-		LOGD("packet data is apended");
+		LOGD("packet data apended");
 	}
 
 	return ret;
@@ -494,8 +495,8 @@ int __mc_fill_video_packet_with_mm_video_buffer(mc_gst_core_t *core, void *data,
 					tsurf_info.planes[i].offset = tsurf_info.planes[i-1].offset + tsurf_info.planes[i - 1].size;
 
 				tsurf_info.size += tsurf_info.planes[i].size;
+				LOGD("%d plane stride : %d, size : %d", i, tsurf_info.planes[i].stride, tsurf_info.planes[i].size);
 			}
-			LOGD("%d plane stride : %d, size : %d", tsurf_info.planes[i].stride, tsurf_info.planes[i].size);
 			tsurf = tbm_surface_internal_create_with_bos(&tsurf_info, (tbm_bo *)mm_vbuffer->handle.bo, bo_num);
 		}
 
@@ -703,7 +704,6 @@ int __mc_sprddec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* bu
 int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
-
 
 	mc_decoder_info_t *dec_info = (mc_decoder_info_t *)core->codec_info;
 
@@ -2411,7 +2411,7 @@ GstMCBuffer *_mc_gst_media_packet_to_gstbuffer(mc_gst_core_t* core, GstCaps **ca
 
 	ret = __mc_fill_input_buffer(core, pkt, mc_buffer);
 	if (ret != MC_ERROR_NONE) {
-		LOGW("failed to fill inbuf");
+		LOGW("failed to fill inbuf: %s (ox%08x)", _mc_error_to_string(ret), ret);
 		return NULL;
 	}
 
@@ -2428,9 +2428,14 @@ GstMCBuffer *_mc_gst_media_packet_to_gstbuffer(mc_gst_core_t* core, GstCaps **ca
 
 media_packet_h __mc_gst_make_media_packet(mc_gst_core_t *core, unsigned char *data, int size)
 {
+	int ret = MEDIA_PACKET_ERROR_NONE;
 	media_packet_h pkt = NULL;
 
-	__mc_fill_output_buffer(core, data, size,  &pkt);
+	ret = __mc_fill_output_buffer(core, data, size,  &pkt);
+	if (ret != MC_ERROR_NONE) {
+		LOGW("failed to fill outbuf: %s (ox%08x)", _mc_error_to_string(ret), ret);
+		return NULL;
+	}
 
 
 	return pkt;
@@ -2466,8 +2471,6 @@ gboolean __mc_gst_bus_callback(GstBus *bus, GstMessage *msg, gpointer data)
 			break;
 		}
 
-		LOGW("Error: %s\n", error->message);
-
 		if (error) {
 			if (error->domain == GST_STREAM_ERROR)
 				ret = __gst_handle_stream_error(core, error, msg);
@@ -2483,6 +2486,7 @@ gboolean __mc_gst_bus_callback(GstBus *bus, GstMessage *msg, gpointer data)
 			if (core->user_cb[_MEDIACODEC_EVENT_TYPE_ERROR]) {
 				((mc_error_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_ERROR])
 					(ret, core->user_data[_MEDIACODEC_EVENT_TYPE_ERROR]);
+					LOGW("Error : %s (ox%08x)", _mc_error_to_string(ret), ret);
 			}
 		}
 		g_error_free(error);
@@ -3209,3 +3213,51 @@ void _mc_wait_for_eos(mc_gst_core_t *core)
 	LOGD("received EOS");
 	g_mutex_unlock(&core->eos_mutex);
 }
+
+const gchar * _mc_error_to_string(mc_ret_e err)
+{
+	guint err_u = (guint) err;
+
+	switch (err_u) {
+	case MC_ERROR:
+		return "Error";
+	case MC_PARAM_ERROR:
+		return "Parameter error";
+	case MC_INVALID_ARG:
+		return "Invailid argument";
+	case MC_PERMISSION_DENIED:
+		return "Permission denied";
+	case MC_INVALID_STATUS:
+		return "Invalid status";
+	case MC_NOT_SUPPORTED:
+		return "Not supported";
+	case MC_INVALID_IN_BUF:
+		return "Invalid inputbuffer";
+	case MC_INVALID_OUT_BUF:
+		return "Invalid outputbuffer";
+	case MC_INTERNAL_ERROR:
+		return "Internal error";
+	case MC_HW_ERROR:
+		return "Hardware error";
+	case MC_NOT_INITIALIZED:
+		return "Not initialized";
+	case MC_INVALID_STREAM:
+		return "Invalid stream";
+	case MC_CODEC_NOT_FOUND:
+		return "Codec not found";
+	case MC_ERROR_DECODE:
+		return "Decode error";
+	case MC_OUTPUT_BUFFER_EMPTY:
+		return "Outputbuffer empty";
+	case MC_OUTPUT_BUFFER_OVERFLOW:
+		return "Outputbuffer overflow";
+	case MC_MEMORY_ALLOCED:
+		return "Memory allocated";
+	case MC_COURRPTED_INI:
+		return "Courrpted ini";
+	default:
+		return "Unknown error";
+
+	}
+}
+
