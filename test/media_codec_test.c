@@ -26,8 +26,7 @@
 #include <tbm_surface.h>
 #include <dlog.h>
 #include <time.h>
-#include <pthread.h>
-#include <semaphore.h>
+
 #define PACKAGE "media_codec_test"
 #define MAX_HANDLE		        4
 #if 0
@@ -52,8 +51,7 @@
 #define ES_DEFAULT_VIDEO_PTS_OFFSET 33000000
 #define CHECK_VALID_PACKET(state, expected_state) \
 	((state & (expected_state)) == (expected_state))
-pthread_t thread1;
-sem_t sem_read;
+
 static int samplerate = DEFAULT_SAMPPLERATE;
 static int channel = DEFAULT_CHANNEL;
 static int bit = DEFAULT_BIT;
@@ -114,7 +112,10 @@ typedef enum {
 	AUDIO_ENC
 } type_e;
 
-
+typedef void* gpointer;
+GMutex data_mutex;
+GCond data_cond;
+static gboolean current_data;
 struct _App {
 	guint sourceid;
 
@@ -758,17 +759,22 @@ void read_data(App * app)
 	int offset;
 	int stride_width, stride_height;
 
-	g_print("----------read data------------\n");
-	while (1)
-	{
-		sem_wait(&sem_read);
+
+
+	while (1) {
+		g_mutex_lock(&data_mutex);
+		while (!current_data)
+			g_cond_wait(&data_cond, &data_mutex);
+		g_mutex_unlock(&data_mutex);
+		g_print("----------read data------------\n");
 		extractor(app, &tmp, &read, &have_frame);
 
 		if (app->offset >= app->length - 1) {
 			/* EOS */
 			g_print("EOS\n");
 			app->finish = clock();
-			pthread_exit(NULL);
+
+			g_thread_exit(NULL);
 		}
 		g_print("length : %d, offset : %d\n", app->length, app->offset);
 
@@ -780,12 +786,13 @@ void read_data(App * app)
 		if (have_frame) {
 			if (media_packet_create_alloc(vdec_fmt, NULL, NULL, &pkt) != MEDIA_PACKET_ERROR_NONE) {
 				fprintf(stderr, "media_packet_create_alloc failed\n");
+				g_thread_exit(NULL);
 
 			}
 
 			if (media_packet_set_pts(pkt, (uint64_t)(pts)) != MEDIA_PACKET_ERROR_NONE) {
 				fprintf(stderr, "media_packet_set_pts failed\n");
-
+				g_thread_exit(NULL);
 			}
 
 			if (app->type != VIDEO_ENC) {
@@ -830,25 +837,35 @@ void read_data(App * app)
 
 			pts += ES_DEFAULT_VIDEO_PTS_OFFSET;
 		}
-
-
-		sem_post(&sem_read);
+		g_mutex_lock(&data_mutex);
+		current_data = TRUE;
+		g_cond_signal(&data_cond);
+		g_mutex_unlock(&data_mutex);
 	}
 
 }
 
 static void start_feed(App *app)
 {
-	sem_post(&sem_read);
+
 	g_print("start_feed\n");
+	g_mutex_lock(&data_mutex);
+	current_data = TRUE;
+	g_cond_signal(&data_cond);
+	g_mutex_unlock(&data_mutex);
 
 }
 
 static void stop_feed(App *app)
 {
 
-	sem_wait(&sem_read);
+
 	g_print("stop_feed\n");
+	g_mutex_lock(&data_mutex);
+	while (!current_data)
+		g_cond_wait(&data_cond, &data_mutex);
+	g_mutex_unlock(&data_mutex);
+
 
 }
 
@@ -909,7 +926,7 @@ static bool _mediacodec_buffer_status_cb(mediacodec_status_e status, void *user_
 	App *app = (App*)user_data;
 
 	if (status == MEDIACODEC_NEED_DATA)
-                start_feed(app);
+		start_feed(app);
 	else if (status == MEDIACODEC_ENOUGH_DATA)
 		stop_feed(app);
 
@@ -955,34 +972,34 @@ static void _mediacodec_prepare(App *app)
 	ret = media_format_create(&vdec_fmt);
 
 	switch (app->type) {
-		case VIDEO_DEC:
+	case VIDEO_DEC:
 			ret = mediacodec_set_vdec_info(app->mc_handle[0], app->width, app->height);
 			media_format_set_video_mime(vdec_fmt, app->mime);
 			media_format_set_video_width(vdec_fmt, app->width);
 			media_format_set_video_height(vdec_fmt, app->height);
 			break;
-		case VIDEO_ENC:
+	case VIDEO_ENC:
 			ret = mediacodec_set_venc_info(app->mc_handle[0], app->width, app->height, app->fps, app->target_bits);
 			media_format_set_video_mime(vdec_fmt, app->mime);
 			media_format_set_video_width(vdec_fmt, app->width);
 			media_format_set_video_height(vdec_fmt, app->height);
 			media_format_set_video_avg_bps(vdec_fmt, app->target_bits);
 			break;
-		case AUDIO_DEC:
+	case AUDIO_DEC:
 			ret = mediacodec_set_adec_info(app->mc_handle[0], app->samplerate, app->channel, app->bit);
 			media_format_set_audio_mime(vdec_fmt, app->mime);
 			media_format_set_audio_channel(vdec_fmt, app->channel);
 			media_format_set_audio_samplerate(vdec_fmt, app->samplerate);
 			media_format_set_audio_bit(vdec_fmt, app->bit);
 			break;
-		case AUDIO_ENC:
+	case AUDIO_ENC:
 			ret = mediacodec_set_aenc_info(app->mc_handle[0], app->samplerate, app->channel, app->bit, app->bitrate);
 			media_format_set_audio_mime(vdec_fmt, app->mime);
 			media_format_set_audio_channel(vdec_fmt, app->channel);
 			media_format_set_audio_samplerate(vdec_fmt, app->samplerate);
 			media_format_set_audio_bit(vdec_fmt, app->bit);
 			break;
-		default:
+	default:
 			g_print("invaild type\n");
 			break;
 	}
@@ -1019,7 +1036,8 @@ static void _mediacodec_prepare(App *app)
 static void input_filepath(char *filename, App *app)
 {
 	GError *error = NULL;
-	int rc;
+	GThread *thread;
+
 	app->obj++;
 	app->file = g_mapped_file_new(filename, FALSE, &error);
 	if (error) {
@@ -1032,16 +1050,8 @@ static void input_filepath(char *filename, App *app)
 	app->data = (guint8 *)g_mapped_file_get_contents(app->file);
 	app->offset = 0;
 	g_print("len : %d, offset : %d, obj : %d", app->length, (int)app->offset, app->obj);
-	/* Sempaphore initialization */
-	sem_init(&sem_read, 0, 0);
-	/* Thread creation */
-	rc = pthread_create( &thread1, NULL, read_data,(App *)app);
-	if (rc){
-		g_print("ERROR; return code from pthread_create() is %d\n", rc);
-		return -1;
-	}
 
-
+	thread = g_thread_new("test", read_data, (App *)app);
 	return;
 }
 
@@ -1161,20 +1171,20 @@ gboolean timeout_menu_display(void* data)
 static void interpret(char *cmd, App *app)
 {
 	switch (g_menu_state) {
-		case CURRENT_STATUS_MAINMENU:
+	case CURRENT_STATUS_MAINMENU:
 			_interpret_main_menu(cmd, app);
 			break;
-		case CURRENT_STATUS_FILENAME:
+	case CURRENT_STATUS_FILENAME:
 			input_filepath(cmd, app);
 			reset_menu_state();
 			break;
-		case CURRENT_STATUS_SET_CODEC:
+	case CURRENT_STATUS_SET_CODEC:
 			{
 				int tmp;
 				static int cnt = 0;
 				char **ptr = NULL;
 				switch (cnt) {
-					case 0:
+				case 0:
 						tmp = atoi(cmd);
 
 						if (tmp > 100 &&
@@ -1189,131 +1199,131 @@ static void interpret(char *cmd, App *app)
 
 						cnt++;
 						break;
-					case 1:
+				case 1:
 						app->flag = atoi(cmd);
 						cnt = 0;
 						reset_menu_state();
 						break;
-					default:
+				default:
 						break;
 				}
 			}
 			break;
-		case CURRENT_STATUS_SET_VDEC_INFO:
+	case CURRENT_STATUS_SET_VDEC_INFO:
 			{
 				static int cnt = 0;
 				switch (cnt) {
-					case 0:
+				case 0:
 						app->width = atoi(cmd);
 						cnt++;
 						break;
-					case 1:
+				case 1:
 						app->height = atoi(cmd);
 						app->type = VIDEO_DEC;
 
 						reset_menu_state();
 						cnt = 0;
 						break;
-					default:
+				default:
 						break;
 				}
 			}
 			break;
-		case CURRENT_STATUS_SET_VENC_INFO:
+	case CURRENT_STATUS_SET_VENC_INFO:
 			{
 				static int cnt = 0;
 				switch (cnt) {
-					case 0:
+				case 0:
 						app->width = atoi(cmd);
 						cnt++;
 						break;
-					case 1:
+				case 1:
 						app->height = atoi(cmd);
 						cnt++;
 						break;
-					case 2:
+				case 2:
 						app->fps = atol(cmd);
 						cnt++;
 						break;
-					case 3:
+				case 3:
 						app->target_bits = atoi(cmd);
 						app->type = VIDEO_ENC;
 
 						reset_menu_state();
 						cnt = 0;
 						break;
-					default:
+				default:
 						break;
 				}
 			}
 			break;
-		case CURRENT_STATUS_SET_ADEC_INFO:
+	case CURRENT_STATUS_SET_ADEC_INFO:
 			{
 				static int cnt = 0;
 				switch (cnt) {
-					case 0:
+				case 0:
 						app->samplerate = atoi(cmd);
 						cnt++;
 						break;
-					case 1:
+				case 1:
 						app->channel = atoi(cmd);
 						cnt++;
 						break;
-					case 2:
+				case 2:
 						app->bit = atoi(cmd);
 						app->type = AUDIO_DEC;
 
 						reset_menu_state();
 						cnt = 0;
 						break;
-					default:
+				default:
 						break;
 				}
 			}
 			break;
-		case CURRENT_STATUS_SET_AENC_INFO:
+	case CURRENT_STATUS_SET_AENC_INFO:
 			{
 				static int cnt = 0;
 				switch (cnt) {
-					case 0:
+				case 0:
 						app->samplerate = atoi(cmd);
 						cnt++;
 						break;
-					case 1:
+				case 1:
 						app->channel = atoi(cmd);
 						cnt++;
 						break;
-					case 2:
+				case 2:
 						app->bit = atoi(cmd);
 						cnt++;
 						break;
-					case 3:
+				case 3:
 						app->bitrate = atoi(cmd);
 						app->type = AUDIO_ENC;
 
 						reset_menu_state();
 						cnt = 0;
 						break;
-					default:
+				default:
 						break;
 				}
 			}
 			break;
-		case CURRENT_STATUS_PROCESS_INPUT:
+	case CURRENT_STATUS_PROCESS_INPUT:
 			{
 				static int num = 0;
 				num = atoi(cmd);
 				reset_menu_state();
 			}
 			break;
-		case CURRENT_STATUS_GET_OUTPUT:
+	case CURRENT_STATUS_GET_OUTPUT:
 			{
 				static int num = 0;
 				num = atoi(cmd);
 				reset_menu_state();
 			}
 			break;
-		default:
+	default:
 			break;
 	}
 
@@ -1425,10 +1435,8 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
 	char filename[100] = {0};
 	FILE *fp = NULL;
 	int ret = 0;
-
 	sprintf(filename, "/tmp/dec_output_dump_%d_%d.yuv", app->width, app->height);
 	fp = fopen(filename, "ab");
-
 	media_packet_get_video_plane_data_ptr(pkt, 0, &temp);
 	media_packet_get_video_stride_width(pkt, 0, &stride_width);
 	media_packet_get_video_stride_height(pkt, 0, &stride_height);
@@ -1460,7 +1468,6 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
 			temp += stride_width;
 		}
 	}
-
 	g_print("codec dec output dumped!!%d\n", ret);
 	fclose(fp);
 
