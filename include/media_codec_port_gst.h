@@ -63,6 +63,13 @@ typedef enum {
     BUF_SHARE_METHOD_FLUSH_BUFFER
 } buf_share_method_t;
 
+typedef enum {
+	VIDEO_DEC,
+	VIDEO_ENC,
+	AUDIO_DEC,
+	AUDIO_ENC
+}mc_type_e;
+
 #ifdef TIZEN_PROFILE_LITE
 struct ion_mmu_data {
     int master_id;
@@ -147,7 +154,8 @@ struct _mc_gst_core_t
 
     void* user_cb[_MEDIACODEC_EVENT_TYPE_NUM];
     void* user_data[_MEDIACODEC_EVENT_TYPE_NUM];
-
+    void *module_data;
+    media_codec_backend backend;
 };
 
 struct _GstMCBuffer
@@ -222,7 +230,7 @@ mc_ret_e mc_gst_process_input(mc_handle_t *mc_handle, media_packet_h inbuf, uint
 mc_ret_e mc_gst_get_output(mc_handle_t *mc_handle, media_packet_h *outbuf, uint64_t timeOutUs);
 
 mc_ret_e mc_gst_flush_buffers(mc_handle_t *mc_handle);
-
+int media_codec_load_module(mc_gst_core_t *core);
 #ifdef __cplusplus
 }
 #endif
