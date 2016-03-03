@@ -23,6 +23,7 @@
 
 #include <media_codec.h>
 #include <media_packet.h>
+#include <media_packet_pool.h>
 #include <tbm_surface.h>
 #include <dlog.h>
 #include <time.h>
@@ -61,10 +62,10 @@ static int samplebyte = DEFAULT_SAMPLEBYTE;
 unsigned char buf_adts[ADTS_HEADER_SIZE];
 
 enum {
-	MC_EXIST_SPS    = 1 << 0,
-	MC_EXIST_PPS    = 1 << 1,
-	MC_EXIST_IDR    = 1 << 2,
-	MC_EXIST_SLICE  = 1 << 3,
+	MC_EXIST_SPS = 1 << 0,
+	MC_EXIST_PPS = 1 << 1,
+	MC_EXIST_IDR = 1 << 2,
+	MC_EXIST_SLICE = 1 << 3,
 
 	MC_VALID_HEADER = (MC_EXIST_SPS | MC_EXIST_PPS),
 	MC_VALID_FIRST_SLICE = (MC_EXIST_SPS | MC_EXIST_PPS | MC_EXIST_IDR)
@@ -113,7 +114,6 @@ typedef enum {
 	AUDIO_ENC
 } type_e;
 
-
 struct _App {
 	GMainLoop *loop;
 	guint sourceid;
@@ -151,7 +151,6 @@ struct _App {
 	guint bitrate;
 	bool is_amr_nb;
 
-
 	/* Render */
 	guint w;
 	guint h;
@@ -169,6 +168,7 @@ media_format_h aenc_fmt = NULL;
 media_format_h adec_fmt = NULL;
 media_format_h vdec_fmt = NULL;
 media_format_h venc_fmt = NULL;
+media_packet_pool_h pkt_pool = NULL;
 
 #if DUMP_OUTBUF
 FILE *fp_out = NULL;
@@ -182,18 +182,18 @@ static void display_sub_basic();
 
 /* For debugging */
 static void mc_hex_dump(char *desc, void *addr, int len);
-static void decoder_output_dump(App *app, media_packet_h pkt);
+static void decoder_output_dump(App * app, media_packet_h pkt);
 
 /* */
 
-void (*extractor)(App *app, unsigned char** data, int *size, bool *have_frame);
+void (*extractor) (App * app, unsigned char **data, int *size, bool * have_frame);
 
 int g_menu_state = CURRENT_STATUS_MAINMENU;
 
 static int _create_app(void *data)
 {
 	printf("My app is going alive!\n");
-	App *app = (App*)data;
+	App *app = (App *) data;
 
 	g_mutex_init(&app->lock);
 	return 0;
@@ -201,13 +201,12 @@ static int _create_app(void *data)
 
 static int _terminate_app(void *data)
 {
-	printf("My app is going gone!\n");
-	App *app = (App*)data;
+        printf("My app is going gone!\n");
+	App *app = (App *) data;
 
 	g_mutex_clear(&app->lock);
 	return 0;
 }
-
 
 struct appcore_ops ops = {
 	.create = _create_app,
@@ -216,23 +215,23 @@ struct appcore_ops ops = {
 
 static const guint mp3types_bitrates[2][3][16] = {
 	{
-		{0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448,},
-		{0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384,},
-		{0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320,}
-	},
+	 {0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448,},
+	 {0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384,},
+	 {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320,}
+	 },
 	{
-		{0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256,},
-		{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160,},
-		{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160,}
-	},
+	 {0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256,},
+	 {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160,},
+	 {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160,}
+	 },
 };
 
 static const guint mp3types_freqs[3][3] = { {44100, 48000, 32000},
-	{22050, 24000, 16000},
-	{11025, 12000, 8000}
+{22050, 24000, 16000},
+{11025, 12000, 8000}
 };
 
-void h264_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
+void h264_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
 {
 	int nal_length = 0;
 	unsigned char val, zero_count;
@@ -280,7 +279,7 @@ void h264_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 
 	read = (index - zero_count - 1);
 
-	nal_unit_type = *(app->data+app->offset+4) & 0x1F;
+	nal_unit_type = *(app->data + app->offset + 4) & 0x1F;
 	g_print("nal_unit_type : %x\n", nal_unit_type);
 
 	switch (nal_unit_type) {
@@ -294,7 +293,7 @@ void h264_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 		break;
 	case NAL_SLICE_IDR:
 	case NAL_SEI:
-		g_print ("nal_unit_type : IDR\n");
+		g_print("nal_unit_type : IDR\n");
 		state |= MC_EXIST_IDR;
 		break;
 	case NAL_SLICE_NO_PARTITIONING:
@@ -304,7 +303,7 @@ void h264_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 		state |= MC_EXIST_SLICE;
 		break;
 	default:
-		g_print ("nal_unit_type : %x", nal_unit_type);
+		g_print("nal_unit_type : %x", nal_unit_type);
 		break;
 	}
 
@@ -319,15 +318,15 @@ void h264_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 			*data = app->data;
 			*size = app->offset + read;
 		} else {
-			*data = app->data+app->offset;
+			*data = app->data + app->offset;
 			*size = read;
 		}
 		state = 0;
 	} else {
-		*data = app->data+app->offset;
+		*data = app->data + app->offset;
 		*size = read;
 	}
-DONE:
+ DONE:
 	app->offset += read;
 }
 
@@ -495,7 +494,7 @@ void amrdec_extractor(App * app, unsigned char **data, int *size, bool * have_fr
 	*have_frame = TRUE;
 }
 
-void nv12_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
+void nv12_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
 {
 	int yuv_size;
 	int offset = app->length - app->offset;
@@ -514,7 +513,7 @@ void nv12_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 		*size = yuv_size;
 }
 
-void yuv_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
+void yuv_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
 {
 	int yuv_size;
 	int offset = app->length - app->offset;
@@ -536,13 +535,12 @@ void yuv_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 
 }
 
-void aacenc_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
+void aacenc_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
 {
 	int read_size;
 	int offset = app->length - app->offset;
 
-	read_size = ((samplebyte*app->channel)*(app->bit/8));
-
+	read_size = ((samplebyte * app->channel) * (app->bit / 8));
 
 	*have_frame = TRUE;
 
@@ -554,7 +552,7 @@ void aacenc_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 	app->offset += *size;
 }
 
-void amrenc_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
+void amrenc_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
 {
 	int read_size;
 	int offset = app->length - app->offset;
@@ -579,7 +577,7 @@ void amrenc_extractor(App *app, unsigned char **data, int *size, bool *have_fram
  * (case of (LC profile) ADTS format)
  * codec_data : Don't need
  **/
-void aacdec_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
+void aacdec_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
 {
 	int read_size;
 	int offset = app->length - app->offset;
@@ -604,7 +602,7 @@ void aacdec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 
 }
 
-void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
+void mp3dec_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
 {
 	int read_size;
 	guint header;
@@ -616,18 +614,18 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 	header = GST_READ_UINT32_BE(pData);
 
 	if (header == 0) {
-		g_print ("[ERROR] read header size is 0\n");
+		g_print("[ERROR] read header size is 0\n");
 		*have_frame = FALSE;
 	}
 
 	/* if it's not a valid sync */
 	if ((header & 0xffe00000) != 0xffe00000) {
-		g_print ("[ERROR] invalid sync\n");
+		g_print("[ERROR] invalid sync\n");
 		*have_frame = FALSE;
 	}
 
 	if (((header >> 19) & 3) == 0x1) {
-		g_print ("[ERROR] invalid MPEG version: %d\n", (header >> 19) & 3);
+		g_print("[ERROR] invalid MPEG version: %d\n", (header >> 19) & 3);
 		*have_frame = FALSE;
 	} else {
 		if (header & (1 << 20)) {
@@ -649,7 +647,7 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 
 	/* if it's an invalid bitrate */
 	if (((header >> 12) & 0xf) == 0xf) {
-		g_print ("[ERROR] invalid bitrate: %d\n", (header >> 12) & 0xf);
+		g_print("[ERROR] invalid bitrate: %d\n", (header >> 12) & 0xf);
 		*have_frame = FALSE;
 	} else {
 		bitrate = (header >> 12) & 0xF;
@@ -661,7 +659,7 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 
 	/* if it's an invalid samplerate */
 	if (((header >> 10) & 0x3) == 0x3) {
-		g_print ("[ERROR] invalid samplerate: %d\n", (header >> 10) & 0x3);
+		g_print("[ERROR] invalid samplerate: %d\n", (header >> 10) & 0x3);
 		*have_frame = FALSE;
 	} else {
 		sf = (header >> 10) & 0x3;
@@ -732,8 +730,8 @@ void extract_input_aacdec_m4a_test(App * app, unsigned char **data, int *size, b
 		 *     - codec data: channels : 2
 		 */
 		/* 2 bytes are mandatory */
-		codecdata[0] = 0x11;         /* ex) (5bit) 2 (LC) / (4bit) 3 (48khz)*/
-		codecdata[1] = 0x90;         /* ex) (4bit) 2 (2ch) */
+		codecdata[0] = 0x11;	/* ex) (5bit) 2 (LC) / (4bit) 3 (48khz) */
+		codecdata[1] = 0x90;	/* ex) (4bit) 2 (2ch) */
 		/* othter bytes are (optional) epconfig information */
 		codecdata[2] = 0x56;
 		codecdata[3] = 0xE5;
@@ -750,8 +748,8 @@ void extract_input_aacdec_m4a_test(App * app, unsigned char **data, int *size, b
 		 *     - codec data: channels : 1
 		 */
 		/* 2 bytes are mandatory */
-		codecdata[0] = 0x13;         /* ex) (5bit) 2 (LC) / (4bit) 9 (22khz) */
-		codecdata[1] = 0x88;         /* ex) (4bit) 1 (1ch) */
+		codecdata[0] = 0x13;	/* ex) (5bit) 2 (LC) / (4bit) 9 (22khz) */
+		codecdata[1] = 0x88;	/* ex) (4bit) 1 (1ch) */
 		/* othter bytes are (optional) epconfig information */
 		codecdata[2] = 0x56;
 		codecdata[3] = 0xE5;
@@ -823,13 +821,16 @@ void extract_input_aacdec_m4a_test(App * app, unsigned char **data, int *size, b
 static void _mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data)
 {
 	if (pkt != NULL) {
-		g_print("Used input buffer = %p\n", pkt);
-		media_packet_destroy(pkt);
+		static int i;
+		g_print("at _mediacodec_empty_buffer_cb,Used input buffer = %p at time  %d \n", pkt, i);
+		media_packet_pool_release_packet(pkt_pool, pkt);
+		i = i + 1;
+
 	}
 	return;
 }
 
-int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
+int _mediacodec_set_codec(int codecid, int flag, int *hardware)
 {
 	bool encoder;
 	media_format_mimetype_e mime;
@@ -915,7 +916,7 @@ int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
 	return mime;
 }
 
-static gboolean read_data(App *app)
+static gboolean read_data(App * app)
 {
 	guint len;
 	bool have_frame = FALSE;
@@ -928,7 +929,7 @@ static gboolean read_data(App *app)
 	int plane_num;
 	int offset;
 	int stride_width, stride_height;
-
+	
 	g_print("----------read data------------\n");
 	extractor(app, &tmp, &read, &have_frame);
 
@@ -947,19 +948,21 @@ static gboolean read_data(App *app)
 	g_print("%p, %d, have_frame :%d, read: %d\n", tmp, (int)read, have_frame, read);
 
 	if (have_frame) {
-		if (media_packet_create_alloc(vdec_fmt, NULL, NULL, &pkt) != MEDIA_PACKET_ERROR_NONE) {
-			fprintf(stderr, "media_packet_create_alloc failed\n");
+
+		if (media_packet_pool_acquire_packet(pkt_pool, &pkt) != MEDIA_PACKET_POOL_ERROR_NONE) {
+
+			fprintf(stderr, "media_packet_pool_aquire_packet failed\n");
 			return FALSE;
 		}
 
-		if (media_packet_set_pts(pkt, (uint64_t)(pts)) != MEDIA_PACKET_ERROR_NONE) {
+		if (media_packet_set_pts(pkt, (uint64_t) (pts)) != MEDIA_PACKET_ERROR_NONE) {
 			fprintf(stderr, "media_packet_set_pts failed\n");
 			return FALSE;
 		}
 
 		if (app->type != VIDEO_ENC) {
 			media_packet_get_buffer_data_ptr(pkt, &buf_data_ptr);
-			media_packet_set_buffer_size(pkt, (uint64_t)read);
+			media_packet_set_buffer_size(pkt, (uint64_t) read);
 
 			memcpy(buf_data_ptr, tmp, read);
 			g_print("tmp:%p, read:%d\n", tmp, read);
@@ -969,15 +972,15 @@ static gboolean read_data(App *app)
 			media_packet_get_video_stride_width(pkt, 0, &stride_width);
 			media_packet_get_video_stride_height(pkt, 0, &stride_height);
 
-			offset = stride_width*stride_height;
+			offset = stride_width * stride_height;
 
 			memcpy(buf_data_ptr, tmp, offset);
 
-			/* UV or U*/
+			/* UV or U */
 			media_packet_get_video_plane_data_ptr(pkt, 1, &buf_data_ptr);
 			media_packet_get_video_stride_width(pkt, 1, &stride_width);
 			media_packet_get_video_stride_height(pkt, 1, &stride_height);
-			memcpy(buf_data_ptr, tmp + offset, stride_width*stride_height);
+			memcpy(buf_data_ptr, tmp + offset, stride_width * stride_height);
 
 			if (app->hardware == FALSE) {
 				/* V */
@@ -987,8 +990,7 @@ static gboolean read_data(App *app)
 
 				offset += stride_width * stride_height;
 
-
-				memcpy(buf_data_ptr, tmp + offset, stride_width*stride_height);
+				memcpy(buf_data_ptr, tmp + offset, stride_width * stride_height);
 			}
 		}
 		mc_hex_dump("inbuf", tmp, 48);
@@ -1003,15 +1005,15 @@ static gboolean read_data(App *app)
 	return TRUE;
 }
 
-static void start_feed(App *app)
+static void start_feed(App * app)
 {
 	if (app->sourceid == 0) {
-		app->sourceid = g_idle_add((GSourceFunc)read_data, app);
+		app->sourceid = g_idle_add((GSourceFunc) read_data, app);
 		g_print("start_feed\n");
 	}
 }
 
-static void stop_feed(App *app)
+static void stop_feed(App * app)
 {
 	if (app->sourceid != 0) {
 		g_source_remove(app->sourceid);
@@ -1022,8 +1024,11 @@ static void stop_feed(App *app)
 
 static bool _mediacodec_inbuf_used_cb(media_packet_h pkt, void *user_data)
 {
+
 	g_print("_mediacodec_inbuf_used_cb!!!\n");
-	media_packet_destroy(pkt);
+
+	media_packet_pool_release_packet(pkt_pool, pkt);
+	
 	return TRUE;
 }
 
@@ -1031,11 +1036,9 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
 {
 	media_packet_h out_pkt = NULL;
 	int ret;
-
-	App *app = (App*)user_data;
+	App *app = (App *) user_data;
 
 	g_print("_mediacodec_outbuf_available_cb\n");
-
 	g_mutex_lock(&app->lock);
 
 	ret = mediacodec_get_output(app->mc_handle[0], &out_pkt, 0);
@@ -1060,7 +1063,6 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
 
 	app->frame_count++;
 
-
 	g_mutex_unlock(&app->lock);
 
 	media_packet_destroy(out_pkt);
@@ -1074,7 +1076,7 @@ static bool _mediacodec_buffer_status_cb(mediacodec_status_e status, void *user_
 {
 	g_print("_mediacodec_buffer_status_cb %d\n", status);
 
-	App *app = (App*)user_data;
+	App *app = (App *) user_data;
 
 	if (status == MEDIACODEC_NEED_DATA)
 		start_feed(app);
@@ -1094,7 +1096,7 @@ static bool _mediacodec_eos_cb(void *user_data)
 	return TRUE;
 }
 
-static void _mediacodec_prepare(App *app)
+static void _mediacodec_prepare(App * app)
 {
 	int ret;
 	media_format_mimetype_e mime;
@@ -1104,18 +1106,17 @@ static void _mediacodec_prepare(App *app)
 #endif
 	/* create instance */
 	ret = mediacodec_create(&app->mc_handle[0]);
-	if (ret  != MEDIACODEC_ERROR_NONE) {
+	if (ret != MEDIACODEC_ERROR_NONE) {
 		g_print("mediacodec_create  failed\n");
 		return;
 	}
 
 	/* set codec */
 	ret = mediacodec_set_codec(app->mc_handle[0], app->codecid, app->flag);
-	if (ret  != MEDIACODEC_ERROR_NONE) {
+	if (ret != MEDIACODEC_ERROR_NONE) {
 		g_print("mediacodec_set_codec failed\n");
 		return;
 	}
-
 
 	app->mime = _mediacodec_set_codec(app->codecid, app->flag, &app->hardware);
 
@@ -1155,7 +1156,7 @@ static void _mediacodec_prepare(App *app)
 		break;
 	}
 
-	if (ret  != MEDIACODEC_ERROR_NONE) {
+	if (ret != MEDIACODEC_ERROR_NONE) {
 		g_print("mediacodec_set_xxxc(%d)_info failed\n", app->type);
 		return;
 	}
@@ -1169,23 +1170,34 @@ static void _mediacodec_prepare(App *app)
 
 	/* prepare */
 	ret = mediacodec_prepare(app->mc_handle[0]);
-	if (ret  != MEDIACODEC_ERROR_NONE) {
+	if (ret != MEDIACODEC_ERROR_NONE) {
 		g_print("mediacodec_prepare failed\n");
 		return;
 	}
 
 	app->frame_count = 0;
 	app->start = clock();
+	int min_size = 1;
+
+	/* get packet pool instance */
+	ret = mediacodec_get_packet_pool(app->mc_handle[0], vdec_fmt, &pkt_pool, min_size);
+
+	if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+		g_print("mediacodec_get_packet_poo failed\n");
+		return;
+	}
+
+
 	g_main_loop_run(app->loop);
 
-	g_print("Average FPS = %3.3f\n", ((double)app->frame_count*1000000/(app->finish - app->start)));
+	g_print("Average FPS = %3.3f\n", ((double)app->frame_count * 1000000 / (app->finish - app->start)));
 
 	g_print("---------------------------\n");
 
 	return;
 }
 
-static void input_filepath(char *filename, App *app)
+static void input_filepath(char *filename, App * app)
 {
 	GError *error = NULL;
 
@@ -1198,7 +1210,7 @@ static void input_filepath(char *filename, App *app)
 	}
 
 	app->length = g_mapped_file_get_length(app->file);
-	app->data = (guint8 *)g_mapped_file_get_contents(app->file);
+	app->data = (guint8 *) g_mapped_file_get_contents(app->file);
 	app->offset = 0;
 	g_print("len : %d, offset : %d, obj : %d", app->length, (int)app->offset, app->obj);
 
@@ -1211,7 +1223,23 @@ void quit_program()
 	if (fp_out)
 		fclose(fp_out);
 #endif
-		elm_exit();
+	
+	if (media_packet_pool_deallocate(pkt_pool) != MEDIA_PACKET_POOL_ERROR_NONE) {
+
+		fprintf(stderr, "media_packet_pool_deallocatet failed\n");
+		g_print("PKT POOL deallocation failed \n");
+		return FALSE;
+	}
+	g_print("PKT POOL deallocated! \n");
+
+	if (media_packet_pool_destroy(pkt_pool) != MEDIA_PACKET_POOL_ERROR_NONE) {
+
+		fprintf(stderr, " media_packet_pool_destroy failed\n");
+		g_print("PKT POOL destroy failed \n");
+		return FALSE;
+	}
+	g_print("PKT POOL destroyed! \n");
+	elm_exit();
 
 }
 
@@ -1221,9 +1249,9 @@ void reset_menu_state()
 	return;
 }
 
-void _interpret_main_menu(char *cmd, App *app)
+void _interpret_main_menu(char *cmd, App * app)
 {
-	int len =  strlen(cmd);
+	int len = strlen(cmd);
 	if (len == 1) {
 		if (strncmp(cmd, "a", 1) == 0)
 			g_menu_state = CURRENT_STATUS_FILENAME;
@@ -1312,14 +1340,13 @@ static void displaymenu(void)
 	g_print(" >>> ");
 }
 
-gboolean timeout_menu_display(void* data)
+gboolean timeout_menu_display(void *data)
 {
 	displaymenu();
 	return FALSE;
 }
 
-
-static void interpret(char *cmd, App *app)
+static void interpret(char *cmd, App * app)
 {
 	switch (g_menu_state) {
 	case CURRENT_STATUS_MAINMENU:
@@ -1330,150 +1357,146 @@ static void interpret(char *cmd, App *app)
 		reset_menu_state();
 		break;
 	case CURRENT_STATUS_SET_CODEC:
-	{
-		int tmp;
-		static int cnt = 0;
-		char **ptr = NULL;
-		switch (cnt) {
-		case 0:
-			tmp = atoi(cmd);
+		{
+			int tmp;
+			static int cnt = 0;
+			char **ptr = NULL;
+			switch (cnt) {
+			case 0:
+				tmp = atoi(cmd);
 
-			if (tmp > 100 &&
-				(tmp != 112) &&
-				(tmp != 128) &&
-				(tmp != 144) &&
-				(tmp != 160) && (tmp != 161) && (tmp != 162) && (tmp != 163)) {
+				if (tmp > 100 && (tmp != 112) && (tmp != 128) && (tmp != 144) && (tmp != 160) && (tmp != 161) && (tmp != 162) && (tmp != 163)) {
 					tmp = strtol(cmd, ptr, 16);
 					app->codecid = 0x2000 + ((tmp & 0xFF) << 4);
-			} else
-				app->codecid = 0x1000 + tmp;
+				} else
+					app->codecid = 0x1000 + tmp;
 
-			cnt++;
-			break;
-		case 1:
-			app->flag = atoi(cmd);
-			cnt = 0;
-			reset_menu_state();
-			break;
-		default:
-			break;
+				cnt++;
+				break;
+			case 1:
+				app->flag = atoi(cmd);
+				cnt = 0;
+				reset_menu_state();
+				break;
+			default:
+				break;
+			}
 		}
-	}
-	break;
+		break;
 	case CURRENT_STATUS_SET_VDEC_INFO:
-	{
-		static int cnt = 0;
-		switch (cnt) {
-		case 0:
-			app->width = atoi(cmd);
-			cnt++;
-			break;
-		case 1:
-			app->height = atoi(cmd);
-			app->type = VIDEO_DEC;
+		{
+			static int cnt = 0;
+			switch (cnt) {
+			case 0:
+				app->width = atoi(cmd);
+				cnt++;
+				break;
+			case 1:
+				app->height = atoi(cmd);
+				app->type = VIDEO_DEC;
 
-			reset_menu_state();
-			cnt = 0;
-			break;
-		default:
-			break;
+				reset_menu_state();
+				cnt = 0;
+				break;
+			default:
+				break;
+			}
 		}
-	}
-	break;
+		break;
 	case CURRENT_STATUS_SET_VENC_INFO:
-	{
-		static int cnt = 0;
-		switch (cnt) {
-		case 0:
-			app->width = atoi(cmd);
-			cnt++;
-			break;
-		case 1:
-			app->height = atoi(cmd);
-			cnt++;
-			break;
-		case 2:
-			app->fps = atol(cmd);
-			cnt++;
-			break;
-		case 3:
-			app->target_bits = atoi(cmd);
-			app->type = VIDEO_ENC;
+		{
+			static int cnt = 0;
+			switch (cnt) {
+			case 0:
+				app->width = atoi(cmd);
+				cnt++;
+				break;
+			case 1:
+				app->height = atoi(cmd);
+				cnt++;
+				break;
+			case 2:
+				app->fps = atol(cmd);
+				cnt++;
+				break;
+			case 3:
+				app->target_bits = atoi(cmd);
+				app->type = VIDEO_ENC;
 
-			reset_menu_state();
-			cnt = 0;
-			break;
-		default:
-			break;
+				reset_menu_state();
+				cnt = 0;
+				break;
+			default:
+				break;
+			}
 		}
-	}
-	break;
+		break;
 	case CURRENT_STATUS_SET_ADEC_INFO:
-	{
-		static int cnt = 0;
-		switch (cnt) {
-		case 0:
-			app->samplerate = atoi(cmd);
-			cnt++;
-			break;
-		case 1:
-			app->channel = atoi(cmd);
-			cnt++;
-			break;
-		case 2:
-			app->bit = atoi(cmd);
-			app->type = AUDIO_DEC;
+		{
+			static int cnt = 0;
+			switch (cnt) {
+			case 0:
+				app->samplerate = atoi(cmd);
+				cnt++;
+				break;
+			case 1:
+				app->channel = atoi(cmd);
+				cnt++;
+				break;
+			case 2:
+				app->bit = atoi(cmd);
+				app->type = AUDIO_DEC;
 
-			reset_menu_state();
-			cnt = 0;
-			break;
-		default:
-			break;
+				reset_menu_state();
+				cnt = 0;
+				break;
+			default:
+				break;
+			}
 		}
-	}
-	break;
+		break;
 	case CURRENT_STATUS_SET_AENC_INFO:
-	{
-		static int cnt = 0;
-		switch (cnt) {
-		case 0:
-			app->samplerate = atoi(cmd);
-			cnt++;
-			break;
-		case 1:
-			app->channel = atoi(cmd);
-			cnt++;
-			break;
-		case 2:
-			app->bit = atoi(cmd);
-			cnt++;
-			break;
-		case 3:
-			app->bitrate = atoi(cmd);
-			app->type = AUDIO_ENC;
+		{
+			static int cnt = 0;
+			switch (cnt) {
+			case 0:
+				app->samplerate = atoi(cmd);
+				cnt++;
+				break;
+			case 1:
+				app->channel = atoi(cmd);
+				cnt++;
+				break;
+			case 2:
+				app->bit = atoi(cmd);
+				cnt++;
+				break;
+			case 3:
+				app->bitrate = atoi(cmd);
+				app->type = AUDIO_ENC;
 
-			reset_menu_state();
-			cnt = 0;
-			break;
-		default:
-			break;
+				reset_menu_state();
+				cnt = 0;
+				break;
+			default:
+				break;
+			}
 		}
-	}
-	break;
+		break;
 	case CURRENT_STATUS_PROCESS_INPUT:
-	{
-		static int num = 0;
-		num = atoi(cmd);
-		reset_menu_state();
-	}
-	break;
+		{
+			static int num = 0;
+			num = atoi(cmd);
+			reset_menu_state();
+		}
+		break;
 	case CURRENT_STATUS_GET_OUTPUT:
-	{
-		static int num = 0;
-		num = atoi(cmd);
-		reset_menu_state();
-	}
-	break;
+		{
+			static int num = 0;
+			num = atoi(cmd);
+			reset_menu_state();
+		}
+		break;
 	default:
 		break;
 	}
@@ -1505,12 +1528,12 @@ static void display_sub_basic()
 	g_print("=========================================================================================\n");
 }
 
-gboolean input(GIOChannel *channel, GIOCondition cond, gpointer data)
+gboolean input(GIOChannel * channel, GIOCondition cond, gpointer data)
 {
 	gchar buf[MAX_STRING_LEN];
 	gsize read;
 	GError *error = NULL;
-	App *context = (App*)data;
+	App *context = (App *) data;
 
 	g_io_channel_read_chars(channel, buf, MAX_STRING_LEN, &read, &error);
 	buf[read] = '\0';
@@ -1528,8 +1551,7 @@ int main(int argc, char *argv[])
 	GIOChannel *stdin_channel;
 	stdin_channel = g_io_channel_unix_new(0);
 	g_io_channel_set_flags(stdin_channel, G_IO_FLAG_NONBLOCK, NULL);
-	g_io_add_watch(stdin_channel, G_IO_IN, (GIOFunc)input, app);
-
+	g_io_add_watch(stdin_channel, G_IO_IN, (GIOFunc) input, app);
 
 	app->loop = g_main_loop_new(NULL, TRUE);
 	app->timer = g_timer_new();
@@ -1540,8 +1562,6 @@ int main(int argc, char *argv[])
 
 	return appcore_efl_main(PACKAGE, &argc, &argv, &ops);
 }
-
-
 
 void mc_hex_dump(char *desc, void *addr, int len)
 {
@@ -1577,13 +1597,12 @@ void mc_hex_dump(char *desc, void *addr, int len)
 	printf("  %s\n", buff);
 }
 
-
-static void decoder_output_dump(App *app, media_packet_h pkt)
+static void decoder_output_dump(App * app, media_packet_h pkt)
 {
 	unsigned char *temp;
 	int i = 0;
 	int stride_width, stride_height;
-	char filename[100] = {0};
+	char filename[100] = { 0 };
 	FILE *fp = NULL;
 	int ret = 0;
 
@@ -1603,22 +1622,22 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
 	if (app->hardware == TRUE) {
 		media_packet_get_video_plane_data_ptr(pkt, 1, &temp);
 		media_packet_get_video_stride_width(pkt, 1, &stride_width);
-		for (i = 0; i < app->height/2; i++) {
+		for (i = 0; i < app->height / 2; i++) {
 			ret = fwrite(temp, app->width, 1, fp);
 			temp += stride_width;
 		}
 	} else {
 		media_packet_get_video_plane_data_ptr(pkt, 1, &temp);
 		media_packet_get_video_stride_width(pkt, 1, &stride_width);
-		for (i = 0; i < app->height/2; i++) {
-			ret = fwrite(temp, app->width/2, 1, fp);
+		for (i = 0; i < app->height / 2; i++) {
+			ret = fwrite(temp, app->width / 2, 1, fp);
 			temp += stride_width;
 		}
 
 		media_packet_get_video_plane_data_ptr(pkt, 2, &temp);
 		media_packet_get_video_stride_width(pkt, 2, &stride_width);
-		for (i = 0; i < app->height/2; i++) {
-			ret = fwrite(temp, app->width/2, 1, fp);
+		for (i = 0; i < app->height / 2; i++) {
+			ret = fwrite(temp, app->width / 2, 1, fp);
 			temp += stride_width;
 		}
 	}
@@ -1627,4 +1646,3 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
 	fclose(fp);
 
 }
-
