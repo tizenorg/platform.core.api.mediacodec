@@ -23,6 +23,7 @@
 
 #include <media_codec.h>
 #include <media_packet.h>
+#include <media_packet_pool.h>
 #include <tbm_surface.h>
 #include <dlog.h>
 #include <time.h>
@@ -169,6 +170,7 @@ media_format_h aenc_fmt = NULL;
 media_format_h adec_fmt = NULL;
 media_format_h vdec_fmt = NULL;
 media_format_h venc_fmt = NULL;
+media_packet_pool_h pkt_pool = NULL;
 
 #if DUMP_OUTBUF
 FILE *fp_out = NULL;
@@ -947,8 +949,8 @@ static gboolean read_data(App *app)
 	g_print("%p, %d, have_frame :%d, read: %d\n", tmp, (int)read, have_frame, read);
 
 	if (have_frame) {
-		if (media_packet_create_alloc(vdec_fmt, NULL, NULL, &pkt) != MEDIA_PACKET_ERROR_NONE) {
-			fprintf(stderr, "media_packet_create_alloc failed\n");
+		if (media_packet_pool_acquire_packet(pkt_pool, &pkt) != MEDIA_PACKET_POOL_ERROR_NONE) {
+			fprintf(stderr, "media_packet_pool_aquire_packet failed\n");
 			return FALSE;
 		}
 
@@ -1023,7 +1025,7 @@ static void stop_feed(App *app)
 static bool _mediacodec_inbuf_used_cb(media_packet_h pkt, void *user_data)
 {
 	g_print("_mediacodec_inbuf_used_cb!!!\n");
-	media_packet_destroy(pkt);
+	media_packet_pool_release_packet(pkt_pool, pkt);
 	return TRUE;
 }
 
@@ -1176,6 +1178,15 @@ static void _mediacodec_prepare(App *app)
 
 	app->frame_count = 0;
 	app->start = clock();
+
+	/* get packet pool instance */
+	ret = mediacodec_get_packet_pool(app->mc_handle[0], vdec_fmt, &pkt_pool);
+
+	if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+		g_print("mediacodec_get_packet_pool failed\n");
+		return;
+	}
+
 	g_main_loop_run(app->loop);
 
 	g_print("Average FPS = %3.3f\n", ((double)app->frame_count*1000000/(app->finish - app->start)));
@@ -1211,7 +1222,22 @@ void quit_program()
 	if (fp_out)
 		fclose(fp_out);
 #endif
-		elm_exit();
+	if (media_packet_pool_deallocate(pkt_pool) != MEDIA_PACKET_POOL_ERROR_NONE) {
+
+		fprintf(stderr, "media_packet_pool_deallocatet failed\n");
+		g_print("PKT POOL deallocation failed \n");
+		return FALSE;
+	}
+	g_print("PKT POOL deallocated! \n");
+
+	if (media_packet_pool_destroy(pkt_pool) != MEDIA_PACKET_POOL_ERROR_NONE) {
+
+		fprintf(stderr, " media_packet_pool_destroy failed\n");
+		g_print("PKT POOL destroy failed \n");
+		return FALSE;
+	}
+	g_print("PKT POOL destroyed! \n");
+	elm_exit();
 
 }
 

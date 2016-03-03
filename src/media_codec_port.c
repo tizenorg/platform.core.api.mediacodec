@@ -25,7 +25,7 @@
 #include <media_codec_port.h>
 #include <media_codec_port_gst.h>
 #include <media_codec_spec_emul.h>
-
+#include <media_packet_pool.h>
 static mc_codec_spec_t spec_emul[MEDIA_CODEC_MAX_CODEC_TYPE];
 
 int mc_create(MMHandleType *mediacodec)
@@ -715,4 +715,19 @@ CALLBACK_ERROR:
 	LOGD("foreach callback returned error");
 	return ret;
 }
+int mc_get_packet_pool(MMHandleType mediacodec,media_format_h fmt, media_packet_pool_h pool)
+{
+	int ret = MC_ERROR_NONE;
+	mc_handle_t *mc_handle = (mc_handle_t *)mediacodec;
+
+	if (!mc_handle) {
+		LOGE("fail invaild param\n");
+		return MC_INVALID_ARG;
+	}
+        ret = mc_gst_get_packet_pool(mc_handle,pool,fmt);
+
+	return ret;
+}
+
+
 

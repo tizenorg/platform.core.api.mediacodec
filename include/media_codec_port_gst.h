@@ -222,7 +222,7 @@ mc_ret_e mc_gst_process_input(mc_handle_t *mc_handle, media_packet_h inbuf, uint
 mc_ret_e mc_gst_get_output(mc_handle_t *mc_handle, media_packet_h *outbuf, uint64_t timeOutUs);
 
 mc_ret_e mc_gst_flush_buffers(mc_handle_t *mc_handle);
-
+int media_codec_load_module(mc_handle_t * mc_handle);
 #ifdef __cplusplus
 }
 #endif
