@@ -27,6 +27,13 @@
 #include <gst/gstelement.h>
 #include <gst/app/gstappsrc.h>
 
+#include <media_backend.h>
+#include <media_packet_pool.h>
+#define PREFIX_LIB    "libmediacodec_e54xx_"
+#define SUFFIX_LIB    ".so"
+#define DEFAULT_LIB   PREFIX_LIB"default"SUFFIX_LIB
+#define DEFAULT_INSTALL_PATH    "/usr/lib/"
+
 #ifdef TIZEN_PROFILE_LITE
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -3261,3 +3268,190 @@ const gchar * _mc_error_to_string(mc_ret_e err)
 	}
 }
 
+int media_codec_load_module(mc_handle_t * mediacodec)
+{
+	char path[PATH_MAX] = { 0, };
+	MEDIACODECModuleData *initdata = NULL;
+	void *module_data;
+	mc_handle_t *mc_handle = (mc_handle_t *) mediacodec;
+	int fd;
+
+	strcpy(path, DEFAULT_INSTALL_PATH);
+	strcat(path, DEFAULT_LIB);
+
+	module_data = dlopen(path, RTLD_LAZY);
+
+	if (!module_data) {
+		LOGE("failed to load module libmediacodec-e54xx");
+		return 0;
+	}
+
+	initdata = dlsym(module_data, "mediacodecModuleData");
+	if (initdata) {
+		ModuleInitProc init;
+		init = initdata->init;
+
+		if (init) {
+			if (!init(mediacodec, fd)) {
+				LOGE("Failed to init module mediacodecModuleData");
+				dlclose(module_data);
+				return 0;
+			}
+
+			if (!mc_handle->backend) {
+				LOGE("mediacodecModuleData wrong operation. Check backend");
+				dlclose(module_data);
+				return 0;
+			}
+		} else {
+			LOGE("mediacodecModuleData  does not supply init symbol");
+			dlclose(module_data);
+			return 0;
+		}
+	} else {
+		LOGE("mediacodecModuleData: module does not have data object");
+		dlclose(module_data);
+		return 0;
+	}
+
+	mc_handle->module_data = module_data;
+
+	LOGD("Success to load module mediacodecModuleData ");
+
+	return 1;
+}
+
+unsigned int getsize_from_backend(mc_handle_t * mediacodec)
+{
+
+	int size;
+	mc_handle_t *mc_handle = (mc_handle_t *) mediacodec;
+	size = mc_handle->backend->calculate_size();
+
+	return size;
+}
+int  _mediacodec_set_mime(mc_handle_t * mediacodec)
+{
+	media_format_mimetype_e mime;
+        mc_handle_t *mc_handle = (mc_handle_t *) mediacodec;
+
+	switch (mc_handle->codec_id) {
+	case MEDIACODEC_H264:
+		if (mc_handle->is_encoder) {
+			mime = (mc_handle->is_hw)? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+		} else {
+			mime = MEDIA_FORMAT_H264_SP;
+		}
+		break;
+	case MEDIACODEC_MPEG4:
+		if(mc_handle->is_encoder) {
+			mime = (mc_handle->is_hw) ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+		} else {
+			mime = MEDIA_FORMAT_MPEG4_SP;
+		}
+		break;
+	case MEDIACODEC_H263:
+		if (mc_handle->is_encoder)  {
+			mime = (mc_handle->is_hw) ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+		} else {
+			mime = MEDIA_FORMAT_H263P;
+		}
+		break;
+	case MEDIACODEC_AAC:
+		if (mc_handle->is_encoder)  {
+			mime = MEDIA_FORMAT_PCM;
+		} else {
+			mime = MEDIA_FORMAT_AAC;
+		}
+		break;
+	case MEDIACODEC_AAC_HE:
+		if (mc_handle->is_encoder)  {
+			mime = MEDIA_FORMAT_PCM;
+		} else {
+			mime = MEDIA_FORMAT_AAC_HE;
+		}
+		break;
+	case MEDIACODEC_AAC_HE_PS:
+		break;
+	case MEDIACODEC_MP3:
+		mime = MEDIA_FORMAT_MP3;
+		break;
+	case MEDIACODEC_VORBIS:
+		break;
+	case MEDIACODEC_FLAC:
+		break;
+	case MEDIACODEC_WMAV1:
+		break;
+	case MEDIACODEC_WMAV2:
+		break;
+	case MEDIACODEC_WMAPRO:
+		break;
+	case MEDIACODEC_WMALSL:
+		break;
+	case MEDIACODEC_AMR_NB:
+		mime = MEDIA_FORMAT_AMR_NB;
+		break;
+	case MEDIACODEC_AMR_WB:
+		mime = MEDIA_FORMAT_AMR_WB;
+		break;
+	default:
+		LOGE("NOT SUPPORTED!!!!");
+		break;
+	}
+	return mime;
+}
+
+int mc_gst_get_packet_pool(mediacodec_h mediacodec,media_packet_pool_h *pkt_pool)
+{
+        int curr_size;
+        int max_size,min_size;
+        media_format_mimetype_e mime_format;
+
+	MEDIACODEC_INSTANCE_CHECK(mediacodec);
+        media_format_h* fmt_handle = NULL;
+        mc_handle_t *handle = (mc_handle_t *) mediacodec;
+
+        int ret = media_packet_pool_create(pkt_pool);
+
+        if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+		LOGE("media_packet_pool_set_media_format failed");
+		return ret;
+        }
+
+        ret = media_format_create(&fmt_handle);
+        mime_format= _mediacodec_set_mime(handle);
+
+	media_format_set_video_mime(fmt_handle,  mime_format);
+	media_format_set_video_width(fmt_handle, handle->info.encoder.width);
+	media_format_set_video_height(fmt_handle, handle->info.encoder.height);
+	media_format_set_video_avg_bps(fmt_handle, handle->info.encoder.bitrate);
+
+
+	ret = media_packet_pool_set_media_format(*pkt_pool,fmt_handle);
+        if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+	        LOGE("media_packet_pool_set_media_format failed");
+		return ret;
+	}
+
+        if ( !media_codec_load_module(handle)) {
+		LOGE("media_codec_load_module failed");
+		return MEDIACODEC_ERROR_INVALID_OPERATION;
+        }
+        max_size = getsize_from_backend(handle);
+        min_size = max_size;
+        ret =media_packet_pool_set_size(*pkt_pool,min_size,max_size);
+        if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+		LOGE("media_packet_pool_set_size failed");
+              return ret;
+	}
+
+        media_packet_pool_get_size(*pkt_pool,&min_size,&max_size,&curr_size);
+        LOGD("curr_size is  %d min_size is %d and max_size is %d \n",curr_size,min_size,max_size);
+
+        ret = media_packet_pool_allocate(*pkt_pool);
+        if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+		LOGE("media_packet_pool_allocate failed");
+                return ret;
+	}
+	return MEDIA_PACKET_POOL_ERROR_NONE;
+}
