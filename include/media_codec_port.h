@@ -27,7 +27,7 @@
 #include <media_codec_bitstream.h>
 #include <media_codec_spec_emul.h>
 #include <media_codec_ini.h>
-
+#include <media_backend.h>
 
 /*===========================================================================================
 |                                                                                                                                                                                      |
@@ -205,6 +205,8 @@ struct _mc_handle_t
     int num_supported_encoder;
 
     mc_ini_t ini;
+    void *module_data;
+    media_codec_backend backend;
 };
 
 /*===========================================================================================

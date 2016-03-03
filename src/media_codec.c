@@ -21,7 +21,7 @@
 #include <media_codec_private.h>
 #include <media_codec_port.h>
 #include <system_info.h>
-
+#include <media_packet_pool.h>
 #include <dlog.h>
 
 static gboolean  __mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data);
@@ -483,6 +483,48 @@ int mediacodec_foreach_supported_codec(mediacodec_h mediacodec, mediacodec_suppo
 
 	return MEDIACODEC_ERROR_NONE;
 
+}
+int mediacodec_get_packet_pool(mediacodec_h mediacodec,media_format_h fmt,media_packet_pool_h *pkt_pool, int min_size)
+{
+        unsigned int temp_size;
+        int curr_size;
+        int max_size;
+	MEDIACODEC_INSTANCE_CHECK(mediacodec);
+	mediacodec_s *handle = (mediacodec_s *)mediacodec;
+
+        int ret = media_packet_pool_create(pkt_pool);
+        if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+         LOGE("media_packet_pool_set_media_format failed");
+            return ret;
+          }
+
+       ret = media_packet_pool_set_media_format(*pkt_pool,fmt);
+        if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+             LOGE("media_packet_pool_set_media_format failed");
+                   return ret;
+       }
+
+       if ( !media_codec_load_module(handle)) {
+         LOGE("media_codec_load_module failed");
+           return MEDIACODEC_ERROR_INVALID_OPERATION;
+       }
+      max_size = getsize_from_backend(handle);
+
+       ret =media_packet_pool_set_size(*pkt_pool,min_size,max_size);
+       if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+             LOGE("media_packet_pool_set_size failed");
+                   return ret;
+       }
+
+        media_packet_pool_get_size(*pkt_pool,&min_size,&max_size,&curr_size);
+        LOGD("curr_size is  %d min_size is %d and max_size is %d \n",curr_size,min_size,max_size);
+
+        ret = media_packet_pool_allocate(*pkt_pool);
+        if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+             LOGE("media_packet_pool_allocate failed");
+                   return ret;
+       }
+       return MEDIA_PACKET_POOL_ERROR_NONE;
 }
 
 static gboolean __mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data)

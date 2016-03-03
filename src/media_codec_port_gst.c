@@ -27,6 +27,12 @@
 #include <gst/gstelement.h>
 #include <gst/app/gstappsrc.h>
 
+#include <media_backend.h>
+#define PREFIX_LIB    "libmediacodec_e54xx_"
+#define SUFFIX_LIB    ".so"
+#define DEFAULT_LIB   PREFIX_LIB"default"SUFFIX_LIB
+#define DEFAULT_INSTALL_PATH    "/usr/lib/"
+
 #ifdef TIZEN_PROFILE_LITE
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -3261,3 +3267,65 @@ const gchar * _mc_error_to_string(mc_ret_e err)
 	}
 }
 
+int media_codec_load_module(mc_handle_t * mediacodec)
+{
+	char path[PATH_MAX] = { 0, };
+	MEDIACODECModuleData *initdata = NULL;
+	void *module_data;
+	mc_handle_t *mc_handle = (mc_handle_t *) mediacodec;
+	int fd;
+
+	strcpy(path, DEFAULT_INSTALL_PATH);
+	strcat(path, DEFAULT_LIB);
+
+	module_data = dlopen(path, RTLD_LAZY);
+
+	if (!module_data) {
+		LOGE("failed to load module libmediacodec-e54xx");
+		return 0;
+	}
+
+	initdata = dlsym(module_data, "mediacodecModuleData");
+	if (initdata) {
+		ModuleInitProc init;
+		init = initdata->init;
+
+		if (init) {
+			if (!init(mediacodec, fd)) {
+				LOGE("Failed to init module mediacodecModuleData");
+				dlclose(module_data);
+				return 0;
+			}
+
+			if (!mc_handle->backend) {
+				LOGE("mediacodecModuleData wrong operation. Check backend");
+				dlclose(module_data);
+				return 0;
+			}
+		} else {
+			LOGE("mediacodecModuleData  does not supply init symbol");
+			dlclose(module_data);
+			return 0;
+		}
+	} else {
+		LOGE("mediacodecModuleData: module does not have data object");
+		dlclose(module_data);
+		return 0;
+	}
+
+	mc_handle->module_data = module_data;
+
+	LOGD("Success to load module mediacodecModuleData ");
+
+	return 1;
+}
+
+unsigned int getsize_from_backend(mc_handle_t * mediacodec)
+{
+
+	int size;
+	mc_handle_t *mc_handle = (mc_handle_t *) mediacodec;
+	size = mc_handle->backend->calculate_size();
+
+	return size;
+}
