@@ -21,7 +21,7 @@
 #include <media_codec_private.h>
 #include <media_codec_port.h>
 #include <system_info.h>
-
+#include <media_packet_pool.h>
 #include <dlog.h>
 
 static gboolean  __mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data);
@@ -482,6 +482,20 @@ int mediacodec_foreach_supported_codec(mediacodec_h mediacodec, mediacodec_suppo
 		return MEDIACODEC_ERROR_NONE;
 
 	return MEDIACODEC_ERROR_NONE;
+
+}
+int mediacodec_get_packet_pool(mediacodec_h mediacodec,media_packet_pool_h *pkt_pool)
+{
+
+	MEDIACODEC_INSTANCE_CHECK(mediacodec);
+	mediacodec_s *handle = (mediacodec_s *)mediacodec;
+	MEDIACODEC_STATE_CHECK(handle, MEDIACODEC_STATE_READY);
+	int ret = mc_get_packet_pool(handle->mc_handle,pkt_pool);
+
+	if (ret != MEDIACODEC_ERROR_NONE)
+		return __convert_error_code(ret, (char *)__FUNCTION__);
+	else
+		return MEDIACODEC_ERROR_NONE;
 
 }
 
