@@ -474,7 +474,7 @@ void amrdec_extractor(App * app, unsigned char **data, int *size, bool * have_fr
 				app->offset += AMR_WB_MIME_HDR_SIZE;
 			} else {
 				g_print("[ERROR] AMR-NB/WB don't detected..\n");
-				return 0;
+				return;
 			}
 		}
 	}
@@ -701,7 +701,7 @@ void extract_input_aacdec_m4a_test(App * app, unsigned char **data, int *size, b
 	int readsize = 0, read_size = 0;
 	size_t result;
 	unsigned int header_size = ADTS_HEADER_SIZE;
-	unsigned char buffer[1000000];
+	unsigned char buffer[100000];
 	unsigned char codecdata[AAC_CODECDATA_SIZE] = { 0, };
 	int offset = app->length - app->offset;
 	unsigned char *pData = app->data + app->offset;
@@ -917,7 +917,7 @@ int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
 
 static gboolean read_data(App *app)
 {
-	guint len;
+	guint len = 0;
 	bool have_frame = FALSE;
 	int ret;
 	static guint64 pts = 0L;
@@ -1194,7 +1194,7 @@ static void input_filepath(char *filename, App *app)
 	if (error) {
 		g_print("failed to open file : %s\n", error->message);
 		g_error_free(error);
-		return -1;
+		return;
 	}
 
 	app->length = g_mapped_file_get_length(app->file);
