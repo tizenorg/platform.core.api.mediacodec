@@ -27,7 +27,7 @@
 #include <gst/gstelement.h>
 #include <gst/app/gstappsrc.h>
 
-#include <media_backend.h>
+#include <media_codec_backend.h>
 #include <media_packet_pool.h>
 #define PREFIX_LIB    "libmediacodec_e54xx_"
 #define SUFFIX_LIB    ".so"
