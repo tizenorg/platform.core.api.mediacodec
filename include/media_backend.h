@@ -29,23 +29,29 @@ extern "C" {
 
 typedef struct _media_codec_backend *media_codec_backend;
 typedef struct _mc_gst_core_t *mediacodec_mgr;
+typedef enum {
+	VIDEO_DEC,
+	VIDEO_ENC,
+	AUDIO_DEC,
+	AUDIO_ENC
+} type_e;
+
 /**
  * @brief media codec backend functions
  *  the set of function pointers for the backend module of media codec.
  */
 struct _media_codec_backend {
 
-		unsigned int (*calculate_size) (void);
-
+	int (*calculate_size) (void);
 	};
 
 /**
  * @brief media codec module information
  */
 
-typedef int (*ModuleInitProc) (mediacodec_mgr, int);
+typedef int (*ModuleInitProc) (mediacodec_mgr, int, type_e);
 
-#define MODULEINITPPROTO(func) int func(mediacodec_mgr, int) /**< prototype for init symbol of bakcend module */
+#define MODULEINITPPROTO(func) int func(mediacodec_mgr, int, type_e) /**< prototype for init symbol of bakcend module */
 
 /**
  * @brief media codec module data

@@ -63,13 +63,6 @@ typedef enum {
     BUF_SHARE_METHOD_FLUSH_BUFFER
 } buf_share_method_t;
 
-typedef enum {
-	VIDEO_DEC,
-	VIDEO_ENC,
-	AUDIO_DEC,
-	AUDIO_ENC
-}mc_type_e;
-
 #ifdef TIZEN_PROFILE_LITE
 struct ion_mmu_data {
     int master_id;

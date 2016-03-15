@@ -3268,6 +3268,27 @@ const gchar * _mc_error_to_string(mc_ret_e err)
 	}
 }
 
+int _mediacodec_set_type_from_core(mc_gst_core_t *core)
+{
+	type_e type;
+	mc_gst_core_t *mc_core = (mc_gst_core_t *) core;
+
+	if (mc_core->video) {
+		if (mc_core->encoder)
+			type = VIDEO_ENC;
+		else
+			type = VIDEO_DEC;
+
+	} else {
+		if (mc_core->encoder)
+			type = AUDIO_ENC;
+		else
+			type = AUDIO_DEC;
+
+	}
+	return type;
+}
+
 int media_codec_load_module(mc_gst_core_t *core)
 {
 	char path[PATH_MAX] = { 0, };
@@ -3275,6 +3296,10 @@ int media_codec_load_module(mc_gst_core_t *core)
 	void *module_data;
 	mc_gst_core_t *mc_core = (mc_gst_core_t *) core;
 	int fd;
+
+	type_e type;
+
+    type = _mediacodec_set_type_from_core(mc_core);
 
 	strcpy(path, DEFAULT_INSTALL_PATH);
 	strcat(path, DEFAULT_LIB);
@@ -3292,7 +3317,7 @@ int media_codec_load_module(mc_gst_core_t *core)
 		init = initdata->init;
 
 		if (init) {
-			if (!init(core, fd)) {
+			if (!init(core, fd,type)) {
 				LOGE("Failed to init module mediacodecModuleData");
 				dlclose(module_data);
 				return 0;
@@ -3401,9 +3426,10 @@ int _mediacodec_set_mime(mc_handle_t *mediacodec)
 
 int _mediacodec_set_type(mc_handle_t *mc_handle)
 {
-	mc_type_e type;
+	type_e type;
 	MEDIACODEC_INSTANCE_CHECK(mc_handle);
 	mc_handle_t *handle = (mc_handle_t *) mc_handle;
+
 	if (handle->is_video) {
 		if (handle->is_encoder)
 			type = VIDEO_ENC;
@@ -3425,7 +3451,7 @@ int mc_gst_get_packet_pool(mc_handle_t *mc_handle, media_packet_pool_h *pkt_pool
 	int curr_size;
 	int max_size, min_size;
 	media_format_mimetype_e mime_format;
-	mc_type_e type;
+	type_e type;
 	MEDIACODEC_INSTANCE_CHECK(mc_handle);
 	media_format_h *fmt_handle = NULL;
 	mc_handle_t *handle = (mc_handle_t *) mc_handle;
