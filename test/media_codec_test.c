@@ -53,10 +53,7 @@
 	((state & (expected_state)) == (expected_state))
 
 #define AAC_CODECDATA_SIZE    16
-static int samplerate = DEFAULT_SAMPPLERATE;
-static int channel = DEFAULT_CHANNEL;
-static int bit = DEFAULT_BIT;
-static int bitrate = DEFAULT_BITRATE;
+
 static int samplebyte = DEFAULT_SAMPLEBYTE;
 unsigned char buf_adts[ADTS_HEADER_SIZE];
 
@@ -182,8 +179,9 @@ static void display_sub_basic();
 
 /* For debugging */
 static void mc_hex_dump(char *desc, void *addr, int len);
+#if DUMP_OUTBUF
 static void decoder_output_dump(App *app, media_packet_h pkt);
-
+#endif
 /* */
 
 void (*extractor)(App *app, unsigned char** data, int *size, bool *have_frame);
@@ -234,11 +232,9 @@ static const guint mp3types_freqs[3][3] = { {44100, 48000, 32000},
 
 void h264_extractor(App *app, unsigned char **data, int *size, bool *have_frame)
 {
-	int nal_length = 0;
 	unsigned char val, zero_count;
 	unsigned char *pNal = app->data + app->offset;
 	int max = app->length - app->offset;
-	int i = 0;
 	int index = 0;
 	int nal_unit_type = 0;
 	bool init;
@@ -334,7 +330,6 @@ DONE:
 void h263_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
 {
 	int len = 0;
-	size_t result;
 	int read_size = 1, state = 1, bStart = 0;
 	unsigned char val;
 	unsigned char *pH263 = app->data + app->offset;
@@ -380,10 +375,9 @@ void h263_extractor(App * app, unsigned char **data, int *size, bool * have_fram
 
 void mpeg4_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
 {
-	int static temp;
 	int len = 0;
-	int result;
-	int read_size = 1, state = 1, bType = 0, bStart = 0;
+	int result = 0;
+	int state = 1, bType = 0;
 	unsigned char val;
 	unsigned char *pMpeg4 = app->data + app->offset;
 	*data = pMpeg4;
@@ -391,7 +385,6 @@ void mpeg4_extractor(App * app, unsigned char **data, int *size, bool * have_fra
 
 	while (1) {
 		if (len >= max) {
-			read_size = (len - 1);
 			*have_frame = FALSE;
 			goto DONE;
 		}
@@ -453,11 +446,8 @@ int *blocksize_tbl;
 void amrdec_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
 {
 	int readsize = 0, mode_temp;
-	size_t result;
-	unsigned int mime_size = AMR_NB_MIME_HDR_SIZE;
 	unsigned int fsize, mode;
 	unsigned char *pAmr = app->data + app->offset;
-	int max = app->length - app->offset;
 	//change the below one to frame count
 	if (app->offset == 0) {
 		if (!memcmp(pAmr, AMR_header, AMR_NB_MIME_HDR_SIZE)) {
@@ -467,7 +457,6 @@ void amrdec_extractor(App * app, unsigned char **data, int *size, bool * have_fr
 			app->offset += AMR_NB_MIME_HDR_SIZE;
 		} else {
 			if (!memcmp(pAmr, AMRWB_header, AMR_WB_MIME_HDR_SIZE)) {
-				mime_size = AMR_WB_MIME_HDR_SIZE;
 				blocksize_tbl = (int *)block_size_wb;
 				mode_temp = pAmr[AMR_WB_MIME_HDR_SIZE];
 				pAmr = pAmr + AMR_WB_MIME_HDR_SIZE;
@@ -488,7 +477,6 @@ void amrdec_extractor(App * app, unsigned char **data, int *size, bool * have_fr
 		g_print("[FAIL] Not found amr frame sync.....\n");
 	}
 
- DONE:
 	*size = readsize;
 	app->offset += readsize;
 	*data = pAmr;
@@ -608,8 +596,8 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 {
 	int read_size;
 	guint header;
-	guint padding, bitrate, lsf, layer, mpg25;
-	guint hdr_bitrate, sf;
+	guint padding, bitrate, lsf=0, layer = 0, mpg25=0;
+	guint hdr_bitrate=0, sf=0;
 	int offset = app->length - app->offset;
 	unsigned char *pData = app->data + app->offset;
 
@@ -699,7 +687,6 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 void extract_input_aacdec_m4a_test(App * app, unsigned char **data, int *size, bool * have_frame)
 {
 	int readsize = 0, read_size = 0;
-	size_t result;
 	unsigned int header_size = ADTS_HEADER_SIZE;
 	unsigned char buffer[100000];
 	unsigned char codecdata[AAC_CODECDATA_SIZE] = { 0, };
@@ -820,6 +807,7 @@ void extract_input_aacdec_m4a_test(App * app, unsigned char **data, int *size, b
  app->offset += *size;
  }
  */
+#if 0
 static void _mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data)
 {
 	if (pkt != NULL) {
@@ -828,11 +816,11 @@ static void _mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data)
 	}
 	return;
 }
-
-int  _mediacodec_set_codec(int codecid, int flag, int *hardware)
+#endif
+int  _mediacodec_set_codec(int codecid, int flag, bool *hardware)
 {
 	bool encoder;
-	media_format_mimetype_e mime;
+	media_format_mimetype_e mime = 0;
 	encoder = GET_IS_ENCODER(flag) ? 1 : 0;
 	*hardware = GET_IS_HW(flag) ? 1 : 0;
 
@@ -925,7 +913,6 @@ static gboolean read_data(App *app)
 	media_packet_h pkt = NULL;
 	unsigned char *tmp;
 	int read;
-	int plane_num;
 	int offset;
 	int stride_width, stride_height;
 
@@ -939,7 +926,7 @@ static gboolean read_data(App *app)
 		g_main_loop_quit(app->loop);
 		return FALSE;
 	}
-	g_print("length : %d, offset : %d\n", app->length, app->offset);
+	g_print("length : %d, offset : %d\n", (int)app->length, (int)app->offset);
 
 	if (app->offset + len > app->length)
 		len = app->length - app->offset;
@@ -1020,7 +1007,7 @@ static void stop_feed(App *app)
 	}
 }
 
-static bool _mediacodec_inbuf_used_cb(media_packet_h pkt, void *user_data)
+static gboolean _mediacodec_inbuf_used_cb(media_packet_h pkt, void *user_data)
 {
 	g_print("_mediacodec_inbuf_used_cb!!!\n");
 	media_packet_destroy(pkt);
@@ -1043,13 +1030,12 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
 	if (ret != MEDIACODEC_ERROR_NONE)
 		g_print("get_output failed\n");
 
-	//decoder_output_dump(app, out_pkt);
-
 #if DUMP_OUTBUF
 	void *data;
 	int buf_size;
 	int stride_width, stride_height;
 
+	decoder_output_dump(app, out_pkt);
 	media_packet_get_buffer_data_ptr(out_pkt, &data);
 	media_packet_get_buffer_size(out_pkt, &buf_size);
 	g_print("output data : %p, size %d\n", data, (int)buf_size);
@@ -1097,7 +1083,6 @@ static bool _mediacodec_eos_cb(void *user_data)
 static void _mediacodec_prepare(App *app)
 {
 	int ret;
-	media_format_mimetype_e mime;
 
 #if DUMP_OUTBUF
 	fp_out = fopen("/tmp/codec_dump.out", "wb");
@@ -1161,11 +1146,11 @@ static void _mediacodec_prepare(App *app)
 	}
 
 	/* set callback */
-	mediacodec_set_input_buffer_used_cb(app->mc_handle[0], _mediacodec_inbuf_used_cb, NULL);
-	mediacodec_set_output_buffer_available_cb(app->mc_handle[0], _mediacodec_outbuf_available_cb, app);
-	mediacodec_set_buffer_status_cb(app->mc_handle[0], _mediacodec_buffer_status_cb, app);
-	mediacodec_set_eos_cb(app->mc_handle[0], _mediacodec_eos_cb, NULL);
-	mediacodec_set_error_cb(app->mc_handle[0], _mediacodec_error_cb, NULL);
+	mediacodec_set_input_buffer_used_cb(app->mc_handle[0], (mediacodec_input_buffer_used_cb)_mediacodec_inbuf_used_cb, NULL);
+	mediacodec_set_output_buffer_available_cb(app->mc_handle[0], (mediacodec_output_buffer_available_cb) _mediacodec_outbuf_available_cb, app);
+	mediacodec_set_buffer_status_cb(app->mc_handle[0], (mediacodec_buffer_status_cb) _mediacodec_buffer_status_cb, app);
+	mediacodec_set_eos_cb(app->mc_handle[0], (mediacodec_eos_cb)_mediacodec_eos_cb, NULL);
+	mediacodec_set_error_cb(app->mc_handle[0], (mediacodec_error_cb)_mediacodec_error_cb, NULL);
 
 	/* prepare */
 	ret = mediacodec_prepare(app->mc_handle[0]);
@@ -1462,15 +1447,11 @@ static void interpret(char *cmd, App *app)
 	break;
 	case CURRENT_STATUS_PROCESS_INPUT:
 	{
-		static int num = 0;
-		num = atoi(cmd);
 		reset_menu_state();
 	}
 	break;
 	case CURRENT_STATUS_GET_OUTPUT:
 	{
-		static int num = 0;
-		num = atoi(cmd);
 		reset_menu_state();
 	}
 	break;
@@ -1524,7 +1505,6 @@ int main(int argc, char *argv[])
 {
 	App *app = &s_app;
 
-	GError *error = NULL;
 	GIOChannel *stdin_channel;
 	stdin_channel = g_io_channel_unix_new(0);
 	g_io_channel_set_flags(stdin_channel, G_IO_FLAG_NONBLOCK, NULL);
@@ -1577,10 +1557,10 @@ void mc_hex_dump(char *desc, void *addr, int len)
 	printf("  %s\n", buff);
 }
 
-
+#if DUMP_OUTBUF
 static void decoder_output_dump(App *app, media_packet_h pkt)
 {
-	unsigned char *temp;
+	void *temp;
 	int i = 0;
 	int stride_width, stride_height;
 	char filename[100] = {0};
@@ -1593,7 +1573,7 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
 	media_packet_get_video_plane_data_ptr(pkt, 0, &temp);
 	media_packet_get_video_stride_width(pkt, 0, &stride_width);
 	media_packet_get_video_stride_height(pkt, 0, &stride_height);
-	g_printf("stride : %d, %d\n", stride_width, stride_height);
+	printf("stride : %d, %d\n", stride_width, stride_height);
 
 	for (i = 0; i < app->height; i++) {
 		ret = fwrite(temp, app->width, 1, fp);
@@ -1627,4 +1607,4 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
 	fclose(fp);
 
 }
-
+#endif

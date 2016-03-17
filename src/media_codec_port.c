@@ -33,7 +33,6 @@ int mc_create(MMHandleType *mediacodec)
 	mc_handle_t *new_mediacodec = NULL;
 	int ret = MC_ERROR_NONE;
 	int i;
-	int support_list = sizeof(spec_emul) / sizeof(spec_emul[0]);
 
 	/* alloc mediacodec structure */
 	new_mediacodec = (mc_handle_t *)g_malloc(sizeof(mc_handle_t));
