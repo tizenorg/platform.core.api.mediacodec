@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-#define MEDIA_CODEC_INI_DEFAULT_PATH   "/usr/etc/mmfw_media_codec.ini"
+#define MEDIA_CODEC_INI_DEFAULT_PATH   "/etc/multimedia/mmfw_media_codec.ini"
 #define MEDIA_CODEC_INI_MAX_STRLEN     256
 #define DEFAULT_PORT "GST_PORT"
 #define MEDIA_CODEC_MAX_CODEC_TYPE 100
