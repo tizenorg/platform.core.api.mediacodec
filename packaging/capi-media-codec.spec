@@ -50,6 +50,7 @@ export FFLAGS="$FFLAGS -DTIZEN_DEBUG_ENABLE"
 %ifarch %{arm}
 export CFLAGS="$CFLAGS -DENABLE_FFMPEG_CODEC"
 %endif
+export CFLAGS="$CFLAGS -DSYSCONFDIR=\\\"%{_sysconfdir}\\\""
 
 MAJORVER=`echo %{version} | awk 'BEGIN {FS="."}{print $1}'`
 %cmake . -DCMAKE_INSTALL_PREFIX=/usr -DFULLVER=%{version} -DMAJORVER=${MAJORVER}
