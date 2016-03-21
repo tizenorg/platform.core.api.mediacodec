@@ -251,8 +251,8 @@ int mc_unset_eos_cb(MMHandleType mediacodec);
 
 int mc_set_buffer_status_cb(MMHandleType mediacodec, mediacodec_buffer_status_cb callback, void* user_data);
 int mc_unset_buffer_status_cb(MMHandleType mediacodec);
-
-
+int mc_set_supported_codec_cb(MMHandleType mediacodec, mediacodec_supported_codec_cb callback, void* user_data);
+int _mediacodec_foreach_supported_codec(MMHandleType mediacodec, mediacodec_supported_codec_cb callback, void* user_data);
 #ifdef __cplusplus
 }
 #endif
