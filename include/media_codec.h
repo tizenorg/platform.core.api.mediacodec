@@ -37,13 +37,13 @@ extern "C" {
 
 /**
  * @brief Media Codec type handle.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  */
 typedef struct mediacodec_s *mediacodec_h;
 
 /**
  * @brief Enumeration of  media codec support  type
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @remarks If this codec is to be used as an encoder or decoder, the codec flag must be set to #MEDIACODEC_ENCODER or
  *          #MEDIACODEC_DECODER. If user doesn't set optional flag, default flags will be set to #MEDIACODEC_SUPPORT_TYPE_SW.
  */
@@ -57,7 +57,7 @@ typedef enum
 
 /**
  * @brief Enumerations of  media codec type
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  */
 typedef enum
 {
@@ -65,21 +65,21 @@ typedef enum
     MEDIACODEC_L16          = 0x1010,   /**< L16*/
     MEDIACODEC_ALAW         = 0x1020,   /**< ALAW*/
     MEDIACODEC_ULAW         = 0x1030,   /**< ULAW*/
-    MEDIACODEC_AMR          = 0x1040,   /**< MEDIACDEC_AMR indicates AMR-NB (Since 2.4)*/
-    MEDIACODEC_AMR_NB       = 0x1040,   /**< AMR-NB (Since 2.4)*/
-    MEDIACODEC_AMR_WB       = 0x1041,   /**< AMR-WB (Since 2.4)*/
+    MEDIACODEC_AMR          = 0x1040,   /**< MEDIACDEC_AMR indicates AMR-NB (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_AMR_NB       = 0x1040,   /**< AMR-NB (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_AMR_WB       = 0x1041,   /**< AMR-WB (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
     MEDIACODEC_G729         = 0x1050,   /**< G729*/
-    MEDIACODEC_AAC          = 0x1060,   /**< MEDIACDEC_AAC indicates AAC-LC (Since 2.4)*/
-    MEDIACODEC_AAC_LC       = 0x1060,   /**< AAC-LC (Since 2.4)*/
-    MEDIACODEC_AAC_HE       = 0x1061,   /**< HE-AAC (Since 2.4)*/
-    MEDIACODEC_AAC_HE_PS    = 0x1062,   /**< HE-AAC-PS (Since 2.4)*/
+    MEDIACODEC_AAC          = 0x1060,   /**< MEDIACDEC_AAC indicates AAC-LC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_AAC_LC       = 0x1060,   /**< AAC-LC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_AAC_HE       = 0x1061,   /**< HE-AAC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_AAC_HE_PS    = 0x1062,   /**< HE-AAC-PS (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
     MEDIACODEC_MP3          = 0x1070,   /**< MP3*/
-    MEDIACODEC_VORBIS       = 0x1080,   /**< VORBIS (Since 2.4)*/
-    MEDIACODEC_FLAC         = 0x1090,   /**< FLAC (Since 2.4)*/
-    MEDIACODEC_WMAV1        = 0x10A0,   /**< WMA version 1 (Since 2.4)*/
-    MEDIACODEC_WMAV2        = 0x10A1,   /**< WMA version 2  (Since 2.4)*/
-    MEDIACODEC_WMAPRO       = 0x10A2,   /**< WMA Professional (Since 2.4)*/
-    MEDIACODEC_WMALSL       = 0x10A3,   /**< WMA Lossless (Since 2.4)*/
+    MEDIACODEC_VORBIS       = 0x1080,   /**< VORBIS (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_FLAC         = 0x1090,   /**< FLAC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_WMAV1        = 0x10A0,   /**< WMA version 1 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_WMAV2        = 0x10A1,   /**< WMA version 2  (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_WMAPRO       = 0x10A2,   /**< WMA Professional (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_WMALSL       = 0x10A3,   /**< WMA Lossless (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
 
     MEDIACODEC_H261         = 0x2010,   /**< H.261*/
     MEDIACODEC_H263         = 0x2020,   /**< H.263*/
@@ -88,15 +88,15 @@ typedef enum
     MEDIACODEC_MPEG1        = 0x2050,   /**< MPEG1*/
     MEDIACODEC_MPEG2        = 0x2060,   /**< MPEG2*/
     MEDIACODEC_MPEG4        = 0x2070,   /**< MPEG4*/
-    MEDIACODEC_HEVC         = 0x2080,   /**< HEVC (Since 2.4)*/
-    MEDIACODEC_VP8          = 0x2090,   /**< VP8 (Since 2.4)*/
-    MEDIACODEC_VP9          = 0x20A0,   /**< VP9 (Since 2.4)*/
-    MEDIACODEC_VC1          = 0x20B0,   /**< VC1 (Since 2.4)*/
+    MEDIACODEC_HEVC         = 0x2080,   /**< HEVC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_VP8          = 0x2090,   /**< VP8 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_VP9          = 0x20A0,   /**< VP9 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_VC1          = 0x20B0,   /**< VC1 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
 } mediacodec_codec_type_e;
 
 /**
  * @brief Enumeration of  media codec error
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  */
 typedef enum
 {
@@ -118,13 +118,13 @@ typedef enum
     MEDIACODEC_ERROR_STREAM_NOT_FOUND           = TIZEN_ERROR_MEDIACODEC | 0x0a,        /**< Cannot find stream */
     MEDIACODEC_ERROR_NOT_SUPPORTED_FORMAT       = TIZEN_ERROR_MEDIACODEC | 0x0b,        /**< Not supported format */
     MEDIACODEC_ERROR_BUFFER_NOT_AVAILABLE       = TIZEN_ERROR_MEDIACODEC | 0x0c,        /**< Not available buffer */
-    MEDIACODEC_ERROR_OVERFLOW_INBUFFER          = TIZEN_ERROR_MEDIACODEC | 0x0d,        /**< Overflow input buffer (Since 2.4)*/
-    MEDIACODEC_ERROR_RESOURCE_OVERLOADED        = TIZEN_ERROR_MEDIACODEC | 0x0e,        /**< Exceed the instance limits (Since 2.4)*/
+    MEDIACODEC_ERROR_OVERFLOW_INBUFFER          = TIZEN_ERROR_MEDIACODEC | 0x0d,        /**< Overflow input buffer (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+    MEDIACODEC_ERROR_RESOURCE_OVERLOADED        = TIZEN_ERROR_MEDIACODEC | 0x0e,        /**< Exceed the instance limits (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
 } mediacodec_error_e;
 
 /**
  * @brief Enumeration of buffer status
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  */
 typedef enum
 {
@@ -134,7 +134,7 @@ typedef enum
 
 /**
  * @brief Called when the input buffer(pkt) used up.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @details It will be invoked when mediacodec has used input buffer.
  * @param[in] pkt  The media packet handle
  * @param[in] user_data  The user data passed from the callback registration function
@@ -146,7 +146,7 @@ typedef void (*mediacodec_input_buffer_used_cb)(media_packet_h pkt, void *user_d
 
 /**
  * @brief Called when the output buffer is available.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @details It will be invoked when mediacodec has output buffer.
  * @param[in] pkt  The media packet handle
  * @param[in] user_data  The user data passed from the callback registration function
@@ -158,7 +158,7 @@ typedef void (*mediacodec_output_buffer_available_cb)(media_packet_h pkt, void *
 
 /**
  * @brief Called when the error has occured
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @details It will be invoked when the error has occured.
  * @param[in] error_code  The error code
  * @param[in] user_data  The user data passed from the callback registration function
@@ -170,7 +170,7 @@ typedef void (*mediacodec_error_cb)(mediacodec_error_e error, void *user_data);
 
 /**
  * @brief Called when there is no data to decode/encode
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @details It will be invoked when the end-of-stream is reached.
  * @param[in] user_data  The user data passed from the callback registration function
  * @pre It will be invoked when the eos event generate if you register this callback using mediacodec_set_eos_cb().
@@ -181,7 +181,7 @@ typedef void (*mediacodec_eos_cb)(void *user_data);
 
 /**
  * @brief Called when the mediacodec needs more data or has enough data.
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @details It is recommended that the application stops calling mediacodec_process_input() when MEDIACODEC_ENOUGH_DATA
  * is invoked.
  * @param[in] user_data  The user data passed from the callback registration function
@@ -192,7 +192,7 @@ typedef void (*mediacodec_buffer_status_cb)(mediacodec_status_e status, void *us
 
 /**
  * @brief Called once for each supported codec types.
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @param[in] codec_type  The codec type
  * @param[in] user_data   The user data passed from the foreach function
  * @return  @c true to continue with the next iteration of the loop, @c false to break out of the loop.
@@ -203,7 +203,7 @@ typedef bool (*mediacodec_supported_codec_cb)(mediacodec_codec_type_e codec_type
 
 /**
  * @brief Creates a mediacodec handle for decoding/encoding
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @remarks you must release @a mediacodec using mediacodec_destroy().\n
  *          Although you can create multiple mediacodec handles at the same time,
  *          the mediacodec cannot guarantee proper operation because of limited resources, like
@@ -220,7 +220,7 @@ int mediacodec_create(mediacodec_h *mediacodec);
 
 /**
  * @brief Destroys the mediacodec handle and releases all its resources.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @remarks To completely shutdown the mediacodec operation, call this function with a valid player handle from any
  *          mediacodec
  *
@@ -235,7 +235,7 @@ int mediacodec_destroy(mediacodec_h mediacodec);
 
 /**
  * @brief Sets the codec type and decoder/encoder.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @remarks If this codec is to be used as a decoder, pass the #MEDIACODEC_DECODER flag.
  *          If this codec is to be used as an encoder, pass the #MEDIACODEC_ENCODER flag.\n
  *          The software codec is used as default setting(#MEDIACODEC_SUPPORT_TYPE_SW) if user doesn't set hardware flag.
@@ -254,7 +254,7 @@ int mediacodec_set_codec(mediacodec_h mediacodec, mediacodec_codec_type_e codec_
 
 /**
  * @brief Sets the default info for the video decoder
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in] width  The width for video decoding.
  * @param[in] height  The height for video decoding.
@@ -268,7 +268,7 @@ int mediacodec_set_vdec_info(mediacodec_h mediacodec, int width, int height);
 
 /**
  * @brief Sets the default info for the video encoder
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @remarks The frame rate is the speed of recording and the speed of playback.
  *          If user wants the default setting for ratecontrol, set @a target_bits to @c 0.
  * @param[in] mediacodec  The handle to mediacodec
@@ -286,7 +286,7 @@ int mediacodec_set_venc_info(mediacodec_h mediacodec, int width, int height, int
 
 /**
  * @brief Sets the default info for the audio decoder
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in] samplerate  The samplerate for audio decoding.
  * @param[in] channel  The channels for audio decoding.
@@ -301,7 +301,7 @@ int mediacodec_set_adec_info(mediacodec_h mediacodec, int samplerate, int channe
 
 /**
  * @brief Sets the default info for the audio encdoer
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in] samplerate  The samplerate for audio encoding.
  * @param[in] channel  The channels for audio encoding.
@@ -317,7 +317,7 @@ int mediacodec_set_aenc_info(mediacodec_h mediacodec, int samplerate, int channe
 
 /**
  * @brief Prepares @a mediacodec for encoding/decoding.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @return @c 0 on success, otherwise a negative error value
  * @retval #MEDIACODEC_ERROR_NONE Successful
@@ -332,7 +332,7 @@ int mediacodec_prepare(mediacodec_h mediacodec);
 
 /**
  * @brief Unprepares @a mediacodec for encoding/decoding.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @return @c 0 on success, otherwise a negative error value
  * @retval #MEDIACODEC_ERROR_NONE Successful
@@ -345,7 +345,7 @@ int mediacodec_unprepare(mediacodec_h mediacodec);
 /**
  * @brief Decodes/Encodes a packet. The function passed undecoded/unencoded packet to the input queue and decode/encode a
  *          frame sequentially.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in] inbuf  The current input format for the decoder/encoder
  * @param[in] timeOutUs  The timeout in microseconds. \n
@@ -361,7 +361,7 @@ int mediacodec_process_input (mediacodec_h mediacodec, media_packet_h inbuf, uin
 
 /**
  * @brief Gets the decoded or encoded packet from the output queue.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[out] outbuf  The current output of the decoder/encoder. this function passed decoded/encoded frame to output
  *                    queue.
@@ -377,7 +377,7 @@ int mediacodec_get_output (mediacodec_h mediacodec, media_packet_h *outbuf, uint
 
 /**
  * @brief Flushes both input and output buffers.
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @return @c 0 on success, otherwise a negative error value
  * @retval #MEDIACODEC_ERROR_NONE Successful
@@ -387,7 +387,7 @@ int mediacodec_flush_buffers (mediacodec_h mediacodec);
 
 /**
  * @brief set empty buffer callback the media codec for process, asynchronously.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in] callback  The callback function to register
  * @param[in] user_data  The user data to be passed to the callback function
@@ -403,7 +403,7 @@ int mediacodec_set_input_buffer_used_cb(mediacodec_h mediacodec, mediacodec_inpu
 
 /**
  * @brief unset input buffer used callback the media codec for process, asynchronously.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @return @c 0 on success, otherwise a negative error value
  * @retval #MEDIACODEC_ERROR_NONE Successful
@@ -414,7 +414,7 @@ int mediacodec_unset_input_buffer_used_cb(mediacodec_h mediacodec);
 
 /**
  * @brief set output buffer available callback the media codec for process, asynchronously.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in] callback  The callback function to register
  * @param[in] user_data  The user data to be passed to the callback function
@@ -430,7 +430,7 @@ int mediacodec_set_output_buffer_available_cb(mediacodec_h mediacodec, mediacode
 
 /**
  * @brief unset output buffer available callback the media codec for process, asynchronously.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @return @c 0 on success, otherwise a negative error value
  * @retval #MEDIACODEC_ERROR_NONE Successful
@@ -441,7 +441,7 @@ int mediacodec_unset_output_buffer_available_cb(mediacodec_h mediacodec);
 
 /**
  * @brief set error callback the media codec for process, asynchronously.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in] callback  The callback function to register
  * @param[in] user_data  The user data to be passed to the callback function
@@ -457,7 +457,7 @@ int mediacodec_set_error_cb(mediacodec_h mediacodec, mediacodec_error_cb callbac
 
 /**
  * @brief unset error callback the media codec for process, asynchronously.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @return @c 0 on success, otherwise a negative error value
  * @retval #MEDIACODEC_ERROR_NONE Successful
@@ -468,7 +468,7 @@ int mediacodec_unset_error_cb(mediacodec_h mediacodec);
 
 /**
  * @brief set eos callback the media codec for process, asynchronously.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in] callback  The callback function to register
  * @param[in] user_data  The user data to be passed to the callback function
@@ -484,7 +484,7 @@ int mediacodec_set_eos_cb(mediacodec_h mediacodec, mediacodec_eos_cb callback, v
 
 /**
  * @brief unset eos callback the media codec for process, asynchronously.
- * @since_tizen 2.3
+ * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @return @c 0 on success, otherwise a negative error value
  * @retval #MEDIACODEC_ERROR_NONE Successful
@@ -495,7 +495,7 @@ int mediacodec_unset_eos_cb(mediacodec_h mediacodec);
 
 /**
  * @brief Registers a callback function to be invoked when the mediacodec needs more data or has enough data.
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in] callback  The callback function to register
  * @param[in] user_data  The user data to be passed to the callback function
@@ -511,7 +511,7 @@ int mediacodec_set_buffer_status_cb(mediacodec_h mediacodec, mediacodec_buffer_s
 
 /**
  * @brief Unregisters the callback function.
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @return @c 0 on success, otherwise a negative error value
  * @retval #MEDIACODEC_ERROR_NONE Successful
@@ -521,7 +521,7 @@ int mediacodec_unset_buffer_status_cb(mediacodec_h mediacodec);
 
 /**
  * @brief Retrieves all supported codecs by invoking callback function once for each supported codecs.
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in] callback  The callback function to invoke
  * @param[in] user_data The user data to be passed to the callback function
@@ -534,7 +534,7 @@ int mediacodec_foreach_supported_codec(mediacodec_h mediacodec, mediacodec_suppo
 
 /**
  * @brief Verifies whether encoding can be performed with codec_type or not.
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @param[in] mediacodec  The handle to mediacodec
  * @param[in]  codec_type  The identifier of the codec type of the encoder.
  * @param[in]  encoder  Whether the encoder or decoder : (@c true = encoder, @c false = decoder).
