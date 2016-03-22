@@ -129,7 +129,8 @@ int mediacodec_create(mediacodec_h *mediacodec)
 	if (ret != MEDIACODEC_ERROR_NONE) {
 		LOGE("MEDIACODEC_ERROR_INVALID_OPERATION(0x%08x)", MEDIACODEC_ERROR_INVALID_OPERATION);
 		handle->state = MEDIACODEC_STATE_NONE;
-		free(handle);
+		g_free(handle->mc_handle);
+		g_free(handle);
 		handle = NULL;
 		return MEDIACODEC_ERROR_INVALID_OPERATION;
 	} else {
