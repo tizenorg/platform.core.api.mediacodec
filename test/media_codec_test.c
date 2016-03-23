@@ -651,6 +651,7 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 	if (((header >> 10) & 0x3) == 0x3) {
 		g_print ("[ERROR] invalid samplerate: %d\n", (header >> 10) & 0x3);
 		*have_frame = FALSE;
+		return;
 	} else {
 		sf = (header >> 10) & 0x3;
 		sf = mp3types_freqs[lsf + mpg25][sf];
