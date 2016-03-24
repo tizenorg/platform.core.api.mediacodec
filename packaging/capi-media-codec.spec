@@ -18,11 +18,6 @@ BuildRequires:  pkgconfig(gstreamer-plugins-base-1.0)
 BuildRequires:  pkgconfig(gstreamer-app-1.0)
 BuildRequires:  pkgconfig(capi-system-info)
 BuildRequires:  pkgconfig(iniparser)
-%if "%{tizen_target_name}" == "TM1"
-#!BuildIgnore:  kernel-headers
-BuildConflicts: linux-glibc-devel
-BuildRequires:  kernel-headers-tizen-dev
-%endif
 
 %description
 
@@ -39,9 +34,7 @@ Requires: %{name} = %{version}-%{release}
 
 
 %build
-%if "%{tizen_target_name}" == "TM1"
-export CFLAGS="$CFLAGS -DTIZEN_PROFILE_LITE"
-%endif
+
 %if 0%{?sec_build_binary_debug_enable}
 export CFLAGS="$CFLAGS -DTIZEN_DEBUG_ENABLE"
 export CXXFLAGS="$CXXFLAGS -DTIZEN_DEBUG_ENABLE"

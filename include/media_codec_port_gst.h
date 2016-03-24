@@ -20,6 +20,7 @@
 
 #include <unistd.h>
 #include <tizen.h>
+#include <gmodule.h>
 #include <media_codec.h>
 #include <media_codec_private.h>
 #include <media_codec_port.h>
@@ -63,14 +64,12 @@ typedef enum {
     BUF_SHARE_METHOD_FLUSH_BUFFER
 } buf_share_method_t;
 
-#ifdef TIZEN_PROFILE_LITE
-struct ion_mmu_data {
-    int master_id;
-    int fd_buffer;
-    unsigned long iova_addr;
-    size_t iova_size;
-};
-#endif
+typedef enum {
+	VIDEO_DEC,
+	VIDEO_ENC,
+	AUDIO_DEC,
+	AUDIO_ENC
+}mc_type_e;
 
 struct _mc_gst_port_t
 {
@@ -89,7 +88,7 @@ struct _mc_gst_port_t
 struct _mc_gst_core_t
 {
     int(**vtable)();
-    const char *mime;
+    char *mime;
     //int format;
     gchar *format;
     GstElement* pipeline;
@@ -145,9 +144,14 @@ struct _mc_gst_core_t
     unsigned char codec_data[100];
     int codec_data_size;
 
+    void *module;
+	int (*mc_calculate_size)();
+	void* (*mc_get_tbm_surface)(MMVideoBuffer *mm_vbuffer);
+	void* (*mc_get_mm_video_buffer)(media_packet_h pkt);
+	int (*mc_set_parameter)(void *obj, char* sz, int value);
+
     void* user_cb[_MEDIACODEC_EVENT_TYPE_NUM];
     void* user_data[_MEDIACODEC_EVENT_TYPE_NUM];
-
 };
 
 struct _GstMCBuffer
@@ -166,45 +170,33 @@ int __mc_fill_input_buffer(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer 
 int __mc_fill_output_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt);
 int __mc_create_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config);
 
-//int __mc_venc_link(mc_gst_core_t *core);
-//int __mc_general_link(mc_gst_core_t *core);
+int __mc_fill_input_buffer_with_packet(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *buff);
+int __mc_fill_input_buffer_with_venc_packet(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *mc_buffer);
 
-int __mc_fill_inbuf_with_mm_video_buffer(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *buff);
-int __mc_fill_inbuf_with_packet(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *buff);
-int __mc_fill_inbuf_with_venc_packet(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *mc_buffer);
+int __mc_fill_packet_with_output_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt);
+int __mc_fill_venc_packet_with_output_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt);
+int __mc_fill_vdec_packet_with_output_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *pkt);
 
-int __mc_fill_packet_with_outbuf(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt);
-int __mc_fill_venc_packet_with_outbuf(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt);
-int __mc_fill_video_packet_with_mm_video_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt);
-int __mc_fill_vdec_packet_with_outbuf(mc_gst_core_t *core, void *data, int size, media_packet_h *pkt);
-
-int __mc_vdec_h264_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
+int __mc_vdec_h264_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
 int __mc_vdec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_vdec_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_vdec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_h264dec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_sprddec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_hw_h264enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_sprdenc_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_aenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_adec_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_aenc_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_adec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_adec_aacv12_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_adec_mp3_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_adec_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_adec_amrwb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_adec_vorbis_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_adec_flac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-bool _mc_is_voss (unsigned char *p, int size, int *codec_size);
-bool _mc_is_ivop (unsigned char *p, int size, int pos);
-bool _mc_is_vop (unsigned char *p, int size, int pos);
-
+int __mc_vdec_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_vdec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_h264dec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_sprddec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_aenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_adec_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_aenc_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_adec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_adec_aacv12_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_adec_mp3_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_adec_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_adec_amrwb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_adec_vorbis_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_adec_flac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
+int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
 
 void _mc_create_codec_map_from_ini(mc_handle_t *mc_handle, mc_codec_spec_t *spec_emul);
 void _mc_create_decoder_map_from_ini(mc_handle_t *mc_handle);
