@@ -579,7 +579,7 @@ int __mc_create_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, boo
 	return core->vtable[create_caps](core, caps, buff, codec_config);
 }
 
-int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -597,7 +597,7 @@ int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboole
 	return MC_ERROR_NONE;
 }
 
-int __mc_hw_h264enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_hw_h264enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -616,7 +616,7 @@ int __mc_hw_h264enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,
 	return MC_ERROR_NONE;
 }
 
-int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -637,7 +637,7 @@ int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gbo
 	return MC_ERROR_NONE;
 }
 
-int __mc_sprdenc_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,gboolean  codec_config)
+int __mc_sprdenc_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -657,7 +657,7 @@ int __mc_sprdenc_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *bu
 	return MC_ERROR_NONE;
 }
 
-int __mc_h264dec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_h264dec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -675,7 +675,7 @@ int __mc_h264dec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gbo
 	return MC_ERROR_NONE;
 }
 
-int __mc_sprddec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_sprddec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -696,7 +696,7 @@ int __mc_sprddec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* bu
 	return MC_ERROR_NONE;
 }
 
-int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -715,7 +715,7 @@ int __mc_sprddec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gbo
 	return MC_ERROR_NONE;
 }
 
-int __mc_vdec_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_vdec_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -728,7 +728,7 @@ int __mc_vdec_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,g
 	return MC_ERROR_NONE;
 }
 
-int __mc_vdec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_vdec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -756,7 +756,7 @@ int __mc_vdec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gbool
 	return MC_ERROR_NONE;
 }
 
-int __mc_vdec_h264_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_vdec_h264_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -770,7 +770,7 @@ int __mc_vdec_h264_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,g
 	return MC_ERROR_NONE;
 }
 
-int __mc_aenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_aenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -803,7 +803,7 @@ Enum "GstFFMpegCompliance" Default: 0, "normal"
 	return MC_ERROR_NONE;
 }
 
-int __mc_aenc_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_aenc_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -822,7 +822,7 @@ int __mc_aenc_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gb
 	return MC_ERROR_NONE;
 }
 
-int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -840,7 +840,7 @@ int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,
 	return MC_ERROR_NONE;
 }
 
-int __mc_adec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_adec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	int ret = MC_ERROR_NONE;
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
@@ -870,7 +870,7 @@ int __mc_adec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboole
 	return ret;
 }
 
-int __mc_adec_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gboolean  codec_config)
+int __mc_adec_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config)
 {
 	int ret = MC_ERROR_NONE;
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
@@ -900,7 +900,7 @@ int __mc_adec_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,gb
 	return ret;
 }
 
-int __mc_adec_aacv12_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,gboolean  codec_config)
+int __mc_adec_aacv12_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, gboolean codec_config)
 {
 	int ret = MC_ERROR_NONE;
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
@@ -930,7 +930,7 @@ int __mc_adec_aacv12_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff
 	return ret;
 }
 
-int __mc_adec_mp3_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,gboolean  codec_config)
+int __mc_adec_mp3_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -950,7 +950,7 @@ int __mc_adec_mp3_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,gb
 	return MC_ERROR_NONE;
 }
 
-int __mc_adec_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,gboolean  codec_config)
+int __mc_adec_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -966,7 +966,7 @@ int __mc_adec_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,
 	return MC_ERROR_NONE;
 }
 
-int __mc_adec_amrwb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,gboolean  codec_config)
+int __mc_adec_amrwb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -982,7 +982,7 @@ int __mc_adec_amrwb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,
 	return MC_ERROR_NONE;
 }
 
-int __mc_adec_vorbis_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,gboolean  codec_config)
+int __mc_adec_vorbis_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -1014,7 +1014,7 @@ int __mc_adec_vorbis_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff
 	return ret;
 }
 
-int __mc_adec_flac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,gboolean  codec_config)
+int __mc_adec_flac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, gboolean codec_config)
 {
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);
 
@@ -1047,7 +1047,7 @@ int __mc_adec_flac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,g
 	return ret;
 }
 
-int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff,gboolean  codec_config)
+int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, gboolean codec_config)
 {
 	int ret = MC_ERROR_NONE;
 	g_return_val_if_fail(core != NULL, MC_PARAM_ERROR);

@@ -379,20 +379,20 @@ int mc_ini_load(mc_ini_t *ini)
 	}
 	LOGD("The port is set to [%s] [%d]\n", ini->port_name, ini->port_type);
 
-    for (i = 0;i < codec_list; i++) {
+	for (i = 0; i < codec_list; i++) {
 		memset(cname, 0x00, CNAME_SIZE);
 		snprintf(cname, CNAME_SIZE, "%s", general_codec_list[i].cname);
 		int len = strlen(cname);
 
-		snprintf(cname+len, CNAME_SIZE-len, "%s",":hw_decoder");
-		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[0],cname);
-		snprintf(cname+len, CNAME_SIZE-len, "%s",":hw_encoder");
-		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[1],cname);
-		snprintf(cname+len, CNAME_SIZE-len, "%s",":sw_decoder");
-		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[2],cname);
-		snprintf(cname+len, CNAME_SIZE-len, "%s",":sw_encoder");
-		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[3],cname);
-    }
+		snprintf(cname+len, CNAME_SIZE-len, "%s", ":hw_decoder");
+		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[0], cname);
+		snprintf(cname+len, CNAME_SIZE-len, "%s", ":hw_encoder");
+		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[1], cname);
+		snprintf(cname+len, CNAME_SIZE-len, "%s", ":sw_decoder");
+		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[2], cname);
+		snprintf(cname+len, CNAME_SIZE-len, "%s", ":sw_encoder");
+		MEDIA_CODEC_PRINT_LIST(ini->codec[i].codec_info[3], cname);
+	}
 
 	/* free dict as we got our own structure */
 	iniparser_freedict(dict);

@@ -403,9 +403,9 @@ void mpeg4_extractor(App * app, unsigned char **data, int *size, bool * have_fra
 				state = 1;
 			break;
 		case 3:
-			if (val == 0x01) {
+			if (val == 0x01)
 				state++;
-			} else
+			else
 				state = 1;
 			break;
 		case 4:
@@ -448,7 +448,7 @@ void amrdec_extractor(App * app, unsigned char **data, int *size, bool * have_fr
 	int readsize = 0, mode_temp;
 	unsigned int fsize, mode;
 	unsigned char *pAmr = app->data + app->offset;
-	//change the below one to frame count
+	/* change the below one to frame count */
 	if (app->offset == 0) {
 		if (!memcmp(pAmr, AMR_header, AMR_NB_MIME_HDR_SIZE)) {
 			blocksize_tbl = (int *)block_size_nb;
@@ -596,8 +596,8 @@ void mp3dec_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 {
 	int read_size;
 	guint header;
-	guint padding, bitrate, lsf=0, layer = 0, mpg25=0;
-	guint hdr_bitrate=0, sf=0;
+	guint padding, bitrate, lsf = 0, layer = 0, mpg25 = 0;
+	guint hdr_bitrate = 0, sf = 0;
 	int offset = app->length - app->offset;
 	unsigned char *pData = app->data + app->offset;
 
@@ -699,7 +699,7 @@ void extract_input_aacdec_m4a_test(App * app, unsigned char **data, int *size, b
 	 * Testsuit that are not guaranteed to be available on functionality of all General DEMUXER/PARSER.
 	 */
 
-	//change the below one later
+	/* change the below one later */
 	if (app->offset == 0) {
 		/*
 		 * CAUTION : Codec data is needed only once  in first time
@@ -757,7 +757,7 @@ void extract_input_aacdec_m4a_test(App * app, unsigned char **data, int *size, b
 		}
 		readsize = read_size - header_size;
 		memcpy(buffer + AAC_CODECDATA_SIZE, pData + 7, readsize);
-		read_size = readsize + AAC_CODECDATA_SIZE;	//return combination of (codec_data + raw_data)
+		read_size = readsize + AAC_CODECDATA_SIZE;	/* return combination of (codec_data + raw_data) */
 		app->offset += header_size + readsize;
 		goto DONE;
 	}
@@ -765,7 +765,7 @@ void extract_input_aacdec_m4a_test(App * app, unsigned char **data, int *size, b
 	if ((pData != NULL) && (pData[0] == 0xff) && ((pData[1] & 0xf6) == 0xf0)) {
 		read_size = ((pData[3] & 0x03) << 11) | (pData[4] << 3) | ((pData[5] & 0xe0) >> 5);
 		readsize = read_size - header_size;
-		memcpy(buffer, pData + 7, readsize);	//Make only RAW data, so exclude header 7 bytes
+		memcpy(buffer, pData + 7, readsize);	/* Make only RAW data, so exclude header 7 bytes */
 		read_size = readsize;
 		app->offset += header_size + readsize;
 
