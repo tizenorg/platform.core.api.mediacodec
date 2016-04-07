@@ -715,3 +715,34 @@ CALLBACK_ERROR:
 	return ret;
 }
 
+int mc_get_packet_pool(MMHandleType mediacodec, media_packet_pool_h *pool)
+{
+	int ret = MC_ERROR_NONE;
+	mc_handle_t *mc_handle = (mc_handle_t *)mediacodec;
+
+	if (!mc_handle) {
+		LOGE("fail invaild param\n");
+		return MC_INVALID_ARG;
+	}
+
+	/* setting core details */
+	switch (mc_handle->port_type) {
+	case MEDIACODEC_PORT_TYPE_GENERAL:
+		break;
+
+	case MEDIACODEC_PORT_TYPE_OMX:
+		break;
+
+	case MEDIACODEC_PORT_TYPE_GST:
+        ret = mc_gst_get_packet_pool(mc_handle, pool);
+		break;
+
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+
+
