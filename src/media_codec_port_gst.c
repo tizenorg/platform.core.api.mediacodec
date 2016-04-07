@@ -84,6 +84,9 @@ static void __csc_tiled_to_linear_crop(unsigned char *yuv420_dest,
 static void _mc_send_eos_signal(mc_gst_core_t *core);
 static void _mc_wait_for_eos(mc_gst_core_t *core);
 
+static int _mediacodec_set_mime(mc_gst_core_t *core);
+static int _mediacodec_set_type(mc_gst_core_t *core);
+
 /* video vtable */
 int(*vdec_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_vdec_packet_with_outbuf,  &__mc_vdec_caps};
 int(*venc_vtable[])() = {&__mc_fill_inbuf_with_packet, &__mc_fill_venc_packet_with_outbuf, &__mc_venc_caps};
@@ -3264,3 +3267,174 @@ const gchar * _mc_error_to_string(mc_ret_e err)
 	}
 }
 
+int _mediacodec_set_mime(mc_gst_core_t *core)
+{
+	media_format_mimetype_e mime;
+
+	switch (core->codec_id) {
+	case MEDIACODEC_H264:
+		if (core->encoder)
+			mime = (core->is_hw) ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+		else
+			mime = MEDIA_FORMAT_H264_SP;
+		break;
+	case MEDIACODEC_MPEG4:
+		if (core->encoder)
+			mime = (core->is_hw) ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+		else
+			mime = MEDIA_FORMAT_MPEG4_SP;
+
+		break;
+	case MEDIACODEC_H263:
+		if (core->encoder)
+			mime = (core->is_hw) ? MEDIA_FORMAT_NV12 : MEDIA_FORMAT_I420;
+		else
+			mime = MEDIA_FORMAT_H263P;
+
+		break;
+	case MEDIACODEC_AAC:
+		if (core->encoder)
+			mime = MEDIA_FORMAT_PCM;
+		else
+			mime = MEDIA_FORMAT_AAC;
+
+		break;
+	case MEDIACODEC_AAC_HE:
+		if (core->encoder)
+			mime = MEDIA_FORMAT_PCM;
+		else
+			mime = MEDIA_FORMAT_AAC_HE;
+
+		break;
+	case MEDIACODEC_AAC_HE_PS:
+		break;
+	case MEDIACODEC_MP3:
+		mime = MEDIA_FORMAT_MP3;
+		break;
+	case MEDIACODEC_VORBIS:
+		break;
+	case MEDIACODEC_FLAC:
+		break;
+	case MEDIACODEC_WMAV1:
+		break;
+	case MEDIACODEC_WMAV2:
+		break;
+	case MEDIACODEC_WMAPRO:
+		break;
+	case MEDIACODEC_WMALSL:
+		break;
+	case MEDIACODEC_AMR_NB:
+		mime = MEDIA_FORMAT_AMR_NB;
+		break;
+	case MEDIACODEC_AMR_WB:
+		mime = MEDIA_FORMAT_AMR_WB;
+		break;
+	default:
+		LOGE("NOT SUPPORTED!!!!");
+		break;
+	}
+	return mime;
+}
+
+int _mediacodec_set_type(mc_gst_core_t *core)
+{
+	mc_type_e type;
+
+	if (core->video) {
+		if (core->encoder)
+			type = VIDEO_ENC;
+		else
+			type = VIDEO_DEC;
+
+	} else {
+		if (core->encoder)
+			type = AUDIO_ENC;
+		else
+			type = AUDIO_DEC;
+
+	}
+	return type;
+}
+mc_ret_e mc_gst_get_packet_pool(mc_handle_t *mc_handle, media_packet_pool_h *pkt_pool)
+{
+	int curr_size;
+	int max_size, min_size;
+	media_format_mimetype_e mime_format;
+	mc_type_e type;
+	media_format_h *fmt_handle = NULL;
+	mc_gst_core_t *core = NULL;
+
+	if (!mc_handle)
+		return MC_PARAM_ERROR;
+
+	core = (mc_gst_core_t *)mc_handle->core;
+
+	int ret = media_packet_pool_create(pkt_pool);
+
+	if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+		LOGE("media_packet_pool_create failed");
+		return MC_ERROR;
+	}
+
+	if (media_format_create(&fmt_handle) != MEDIA_FORMAT_ERROR_NONE) {
+		LOGE("media format create failed");
+		return MC_ERROR;
+	}
+	mime_format = _mediacodec_set_mime(core);
+	type = _mediacodec_set_type(core);
+
+	switch (type) {
+	case VIDEO_DEC:
+		media_format_set_video_mime(fmt_handle, mime_format);
+		media_format_set_video_width(fmt_handle, mc_handle->info.decoder.width);
+		media_format_set_video_height(fmt_handle, mc_handle->info.decoder.height);
+		break;
+	case VIDEO_ENC:
+		media_format_set_video_mime(fmt_handle, mime_format);
+		media_format_set_video_width(fmt_handle, mc_handle->info.encoder.width);
+		media_format_set_video_height(fmt_handle, mc_handle->info.encoder.height);
+		media_format_set_video_avg_bps(fmt_handle, mc_handle->info.encoder.bitrate);
+		break;
+	case AUDIO_DEC:
+		media_format_set_audio_mime(fmt_handle, mime_format);
+		media_format_set_audio_channel(fmt_handle, mc_handle->info.decoder.channel);
+		media_format_set_audio_samplerate(fmt_handle, mc_handle->info.decoder.samplerate);
+		media_format_set_audio_bit(fmt_handle, mc_handle->info.decoder.bit);
+		break;
+	case AUDIO_ENC:
+		media_format_set_audio_mime(fmt_handle, mime_format);
+		media_format_set_audio_channel(fmt_handle, mc_handle->info.encoder.channel);
+		media_format_set_audio_samplerate(fmt_handle, mc_handle->info.encoder.samplerate);
+		media_format_set_audio_bit(fmt_handle, mc_handle->info.encoder.bit);
+		break;
+	default:
+		LOGE("invalid format");
+		break;
+	}
+
+	ret = media_packet_pool_set_media_format(*pkt_pool, fmt_handle);
+	if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+		LOGE("media_packet_pool_set_media_format failed");
+		return MC_ERROR;
+	}
+
+	/* will use default size temporarily */
+	max_size = DEFAULT_POOL_SIZE;
+
+	min_size = max_size;
+	ret = media_packet_pool_set_size(*pkt_pool, min_size, max_size);
+	if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+		LOGE("media_packet_pool_set_size failed");
+		return MC_ERROR;
+	}
+
+	media_packet_pool_get_size(*pkt_pool, &min_size, &max_size, &curr_size);
+	LOGD("curr_size is  %d min_size is %d and max_size is %d \n", curr_size, min_size, max_size);
+
+	ret = media_packet_pool_allocate(*pkt_pool);
+	if (ret != MEDIA_PACKET_POOL_ERROR_NONE) {
+		LOGE("media_packet_pool_allocate failed");
+		return MC_ERROR;
+	}
+	return MC_ERROR_NONE;
+}
