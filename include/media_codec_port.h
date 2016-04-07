@@ -237,6 +237,8 @@ int mc_get_output(MMHandleType mediacodec, media_packet_h *outbuf, uint64_t time
 int mc_flush_buffers(MMHandleType mediacodec);
 int mc_get_supported_type(MMHandleType mediacodec, mediacodec_codec_type_e codec_type, bool encoder, int *support_type);
 
+int mc_get_packet_pool(MMHandleType mediacodec, media_packet_pool_h *pool);
+
 int mc_set_empty_buffer_cb(MMHandleType mediacodec, mediacodec_input_buffer_used_cb callback, void* user_data);
 int mc_unset_empty_buffer_cb(MMHandleType mediacodec);
 
@@ -253,6 +255,7 @@ int mc_set_buffer_status_cb(MMHandleType mediacodec, mediacodec_buffer_status_cb
 int mc_unset_buffer_status_cb(MMHandleType mediacodec);
 int mc_set_supported_codec_cb(MMHandleType mediacodec, mediacodec_supported_codec_cb callback, void* user_data);
 int _mediacodec_foreach_supported_codec(MMHandleType mediacodec, mediacodec_supported_codec_cb callback, void* user_data);
+
 #ifdef __cplusplus
 }
 #endif
