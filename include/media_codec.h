@@ -20,6 +20,7 @@
 #include <tizen.h>
 #include <stdint.h>
 #include <media_packet.h>
+#include <media_packet_pool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -563,6 +564,19 @@ int mediacodec_foreach_supported_codec(mediacodec_h mediacodec, mediacodec_suppo
  */
 int mediacodec_get_supported_type(mediacodec_h mediacodec, mediacodec_codec_type_e codec_type, bool encoder, int *support_type);
 
+/**
+ * @brief Gets the pool which is activated for reusing media packets
+ * @since_tizen 3.0
+ * @param[in] mediacodec  The handle to mediacodec
+ * @param[out] pool A new handle for packet pool
+ * @return @c 0 on success, otherwise a negative error value
+ * @retval #MEDIACODEC_ERROR_NONE Successful
+ * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
+ * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
+ * @pre mediacodec_get_packet_pool() should be call after calling mediacodec_prepare().
+ * @remarks The @a pool should be released using media_packet_pool_deallocate() and destroyed using media_packet_pool_destroy()
+ */
+int mediacodec_get_packet_pool(mediacodec_h mediacodec,media_packet_pool_h *pool);
 
 /**
  * @}
