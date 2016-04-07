@@ -1405,8 +1405,9 @@ mc_gst_core_t *mc_gst_core_new()
 
 	g_mutex_init(&core->eos_mutex);
 	g_cond_init(&core->eos_cond);
+	g_cond_init(&core->buffer_cond);
 	g_mutex_init(&core->prepare_lock);
-	g_mutex_init(&core->drain_lock);
+	g_mutex_init(&core->buffer_lock);
 
 	core->need_feed = false;
 	core->eos = false;
@@ -1444,8 +1445,9 @@ void mc_gst_core_free(mc_gst_core_t *core)
 
 	g_mutex_clear(&core->eos_mutex);
 	g_mutex_clear(&core->prepare_lock);
-	g_mutex_clear(&core->drain_lock);
+	g_mutex_clear(&core->buffer_lock);
 	g_cond_clear(&core->eos_cond);
+	g_cond_clear(&core->buffer_cond);
 
 	mc_async_queue_free(async_queue->input);
 	g_free(async_queue);
@@ -1739,7 +1741,14 @@ static int _mc_gst_gstbuffer_to_appsrc(mc_gst_core_t *core, GstMCBuffer *buff)
 	LOGD("pushed buffer to appsrc : %p, buffer of size %" G_GSIZE_FORMAT "",
 			buff->buffer, gst_buffer_get_size(buff->buffer));
 
+	g_mutex_lock(&core->buffer_lock);
+
 	ret = gst_app_src_push_buffer(GST_APP_SRC(core->appsrc), buff->buffer);
+
+	g_cond_signal(&core->buffer_cond);
+	core->buffer_blocked = FALSE;
+
+	g_mutex_unlock(&core->buffer_lock);
 
 	return ret;
 }
@@ -1854,9 +1863,9 @@ mc_ret_e mc_gst_unprepare(mc_handle_t *mc_handle)
 	if (core) {
 		LOGD("@%p(%p) core is uninitializing... v(%d)e(%d)", mc_handle, core, core->video, core->encoder);
 
-		g_mutex_lock(&core->drain_lock);
+		g_mutex_lock(&core->buffer_lock);
 		core->unprepare_flag = TRUE;
-		g_mutex_unlock(&core->drain_lock);
+		g_mutex_unlock(&core->buffer_lock);
 
 		if (core->eos)
 			_mc_send_eos_signal(core);
@@ -1909,28 +1918,32 @@ mc_ret_e mc_gst_process_input(mc_handle_t *mc_handle, media_packet_h inbuf, uint
 
 	core = (mc_gst_core_t *)mc_handle->core;
 
+    core->buffer_blocked = TRUE;
+	g_mutex_lock(&core->buffer_lock);
+
 	g_get_current_time(&nowtv);
-	g_time_val_add(&nowtv, 500 * 1000);   /* usec */
-	/*
-	   if (!g_cond_timed_wait(&nowtv)) {
-	   }
-	   */
+	g_time_val_add(&nowtv, timeOutUs * 1000);   /* usec */
+
+	while (core->buffer_blocked) {
+		if(!g_cond_timed_wait(&core->buffer_cond, &core->buffer_lock, &nowtv))
+			LOGW("Buffer wait timeout[%lld usec]", timeOutUs);
+		break;
+	}
 
 	if (core->prepare_count == 0)
 		return MEDIACODEC_ERROR_INVALID_STATE;
 
-	g_mutex_lock(&core->drain_lock);
 
 	if (!core->eos || !core->unprepare_flag) {
 		mc_async_queue_push(core->available_queue->input, inbuf);
 
 	} else {
 		ret = MC_INVALID_IN_BUF;
-		g_mutex_unlock(&core->drain_lock);
+		g_mutex_unlock(&core->buffer_lock);
 		return ret;
 	}
 
-	g_mutex_unlock(&core->drain_lock);
+	g_mutex_unlock(&core->buffer_lock);
 	LOGI("@v(%d)e(%d)process_input(%d): %p", core->video, core->encoder, core->queued_count, inbuf);
 	core->queued_count++;
 

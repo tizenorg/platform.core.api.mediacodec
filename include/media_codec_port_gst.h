@@ -110,7 +110,8 @@ struct _mc_gst_core_t
     GMutex eos_mutex;
     GMutex eos_wait_mutex;
     GMutex prepare_lock;
-    GMutex drain_lock;
+    GMutex buffer_lock;
+    GCond buffer_cond;
     GCond eos_cond;
     GCond eos_waiting_cond;
 
@@ -126,6 +127,7 @@ struct _mc_gst_core_t
     bool need_codec_data;
     bool need_sync_flag;
     bool unprepare_flag;
+    bool buffer_blocked;
     unsigned int prepare_count;
     unsigned int num_live_buffers;
     unsigned int queued_count;
