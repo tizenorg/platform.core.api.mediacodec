@@ -63,26 +63,27 @@
  */
 typedef enum
 {
-    MC_ERROR_NONE               =    0,
-    MC_ERROR                    =   -1,     /**< codec happens error */
-    MC_MEMORY_ERROR             =   -2,     /**< codec memory is not enough */
-    MC_PARAM_ERROR              =   -3,     /**< codec parameter is error */
-    MC_INVALID_ARG              =   -4,     /** < codec has invalid arguments */
-    MC_PERMISSION_DENIED        =   -5,
-    MC_INVALID_STATUS           =   -6,     /**< codec works at invalid status */
-    MC_NOT_SUPPORTED            =   -7,     /**< codec can't support this specific video format */
-    MC_INVALID_IN_BUF           =   -8,
-    MC_INVALID_OUT_BUF          =   -9,
-    MC_INTERNAL_ERROR           =   -10,
-    MC_HW_ERROR                 =   -11,    /**< codec happens hardware error */
-    MC_NOT_INITIALIZED          =   -12,
-    MC_INVALID_STREAM           =   -13,
-    MC_CODEC_NOT_FOUND          =   -14,
-    MC_ERROR_DECODE             =   -15,
-    MC_OUTPUT_BUFFER_EMPTY      =   -16,
-    MC_OUTPUT_BUFFER_OVERFLOW   =   -17,    /**< codec output buffer is overflow */
-    MC_MEMORY_ALLOCED           =   -18,    /**< codec has got memory and can decode one frame */
-    MC_COURRPTED_INI            =   -19,
+	MC_ERROR_NONE               =    0,
+	MC_ERROR                    =   -1,     /**< codec happens error */
+	MC_MEMORY_ERROR             =   -2,     /**< codec memory is not enough */
+	MC_PARAM_ERROR              =   -3,     /**< codec parameter is error */
+	MC_INVALID_ARG              =   -4,     /** < codec has invalid arguments */
+	MC_PERMISSION_DENIED        =   -5,
+	MC_INVALID_STATUS           =   -6,     /**< codec works at invalid status */
+	MC_NOT_SUPPORTED            =   -7,     /**< codec can't support this specific video format */
+	MC_INVALID_IN_BUF           =   -8,
+	MC_INVALID_OUT_BUF          =   -9,
+	MC_INTERNAL_ERROR           =   -10,
+	MC_HW_ERROR                 =   -11,    /**< codec happens hardware error */
+	MC_NOT_INITIALIZED          =   -12,
+	MC_INVALID_STREAM           =   -13,
+	MC_CODEC_NOT_FOUND          =   -14,
+	MC_ERROR_DECODE             =   -15,
+	MC_OUTPUT_BUFFER_EMPTY      =   -16,
+	MC_OUTPUT_BUFFER_OVERFLOW   =   -17,    /**< codec output buffer is overflow */
+	MC_MEMORY_ALLOCED           =   -18,    /**< codec has got memory and can decode one frame */
+	MC_COURRPTED_INI            =   -19,
+	MC_OUT_OF_MEMORY			=	-20,	/**< when memory is not allocated */
 } mc_ret_e;
 
 /*---------------------------------------------------------------------------
@@ -237,6 +238,8 @@ int mc_get_output(MMHandleType mediacodec, media_packet_h *outbuf, uint64_t time
 int mc_flush_buffers(MMHandleType mediacodec);
 int mc_get_supported_type(MMHandleType mediacodec, mediacodec_codec_type_e codec_type, bool encoder, int *support_type);
 
+int mc_get_packet_pool(MMHandleType mediacodec, media_packet_pool_h *pool);
+
 int mc_set_empty_buffer_cb(MMHandleType mediacodec, mediacodec_input_buffer_used_cb callback, void* user_data);
 int mc_unset_empty_buffer_cb(MMHandleType mediacodec);
 
@@ -253,6 +256,7 @@ int mc_set_buffer_status_cb(MMHandleType mediacodec, mediacodec_buffer_status_cb
 int mc_unset_buffer_status_cb(MMHandleType mediacodec);
 int mc_set_supported_codec_cb(MMHandleType mediacodec, mediacodec_supported_codec_cb callback, void* user_data);
 int _mediacodec_foreach_supported_codec(MMHandleType mediacodec, mediacodec_supported_codec_cb callback, void* user_data);
+
 #ifdef __cplusplus
 }
 #endif
