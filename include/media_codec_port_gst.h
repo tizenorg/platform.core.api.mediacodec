@@ -50,6 +50,7 @@ extern "C" {
 
 #define SCMN_IMGB_MAX_PLANE 4
 #define TBM_API_CHANGE
+#define DEFAULT_POOL_SIZE 20
 
 /* gst port layer */
 typedef struct _mc_gst_port_t mc_gst_port_t;
@@ -62,6 +63,13 @@ typedef enum {
     BUF_SHARE_METHOD_TIZEN_BUFFER,
     BUF_SHARE_METHOD_FLUSH_BUFFER
 } buf_share_method_t;
+
+typedef enum {
+	VIDEO_DEC,
+	VIDEO_ENC,
+	AUDIO_DEC,
+	AUDIO_ENC
+} mc_type_e;
 
 #ifdef TIZEN_PROFILE_LITE
 struct ion_mmu_data {
@@ -201,10 +209,6 @@ int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,
 int __mc_adec_vorbis_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
 int __mc_adec_flac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
 int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean  codec_config);
-bool _mc_is_voss (unsigned char *p, int size, int *codec_size);
-bool _mc_is_ivop (unsigned char *p, int size, int pos);
-bool _mc_is_vop (unsigned char *p, int size, int pos);
-
 
 void _mc_create_codec_map_from_ini(mc_handle_t *mc_handle, mc_codec_spec_t *spec_emul);
 void _mc_create_decoder_map_from_ini(mc_handle_t *mc_handle);
@@ -222,6 +226,8 @@ mc_ret_e mc_gst_process_input(mc_handle_t *mc_handle, media_packet_h inbuf, uint
 mc_ret_e mc_gst_get_output(mc_handle_t *mc_handle, media_packet_h *outbuf, uint64_t timeOutUs);
 
 mc_ret_e mc_gst_flush_buffers(mc_handle_t *mc_handle);
+
+mc_ret_e mc_gst_get_packet_pool(mc_handle_t *mc_handle, media_packet_pool_h *pkt_pool);
 
 #ifdef __cplusplus
 }
