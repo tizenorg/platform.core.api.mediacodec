@@ -51,6 +51,7 @@ extern "C" {
 #define SCMN_IMGB_MAX_PLANE 4
 #define TBM_API_CHANGE
 #define DEFAULT_POOL_SIZE 20
+#define MAX_DQNUM	4
 
 /* gst port layer */
 typedef struct _mc_gst_port_t mc_gst_port_t;
@@ -129,8 +130,8 @@ struct _mc_gst_core_t
     bool unprepare_flag;
     unsigned int prepare_count;
     unsigned int num_live_buffers;
-    unsigned int queued_count;
-    unsigned int dequeued_count;
+    unsigned int etb_count;
+    unsigned int ftb_count;
 
 
     mediacodec_codec_type_e codec_id;
