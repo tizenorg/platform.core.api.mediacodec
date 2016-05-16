@@ -1,7 +1,7 @@
 Name:       capi-media-codec
 Summary:    A Media Codec library in Tizen Native API
-Version:    0.4.0
-Release:    2
+Version:    0.4.1
+Release:    0
 Group:      Multimedia/API
 License:    Apache-2.0
 Source0:    %{name}-%{version}.tar.gz
