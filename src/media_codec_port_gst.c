@@ -49,6 +49,7 @@ static mc_ret_e _mc_gst_destroy_pipeline(mc_gst_core_t *core);
 static void __mc_gst_buffer_add(GstElement *element, GstBuffer *buffer, GstPad *pad, gpointer data);
 static int __mc_output_buffer_finalize_cb(media_packet_h packet, int error_code, void *user_data);
 static void _mc_gst_update_caps(mc_gst_core_t *core, media_packet_h pkt, GstCaps **caps, GstMCBuffer* buff, bool codec_config);
+static gboolean _mc_update_packet_info(mc_gst_core_t *core, media_format_h fmt);
 static GstMCBuffer *_mc_gst_media_packet_to_gstbuffer(mc_gst_core_t *core, GstCaps **caps, media_packet_h pkt, bool codec_config);
 static int _mc_gst_gstbuffer_to_appsrc(mc_gst_core_t *core, GstMCBuffer *buff);
 static gchar *__mc_get_gst_input_format(media_packet_h packet, bool is_hw);
@@ -611,7 +612,7 @@ int __mc_hw_h264enc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff,
 			"height", G_TYPE_INT, enc_info->height,
 			"framerate", GST_TYPE_FRACTION, enc_info->fps, 1,
 			NULL);
-	g_object_set(GST_OBJECT(core->codec), "target-bitrate", enc_info->bitrate*1000, NULL);
+	g_object_set(GST_OBJECT(core->codec), "target-bitrate", enc_info->bitrate, NULL);
 
 	LOGD("%d, %d, %d", enc_info->width, enc_info->height, enc_info->fps);
 
@@ -631,7 +632,7 @@ int __mc_sprdenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gb
 			"framerate", GST_TYPE_FRACTION, enc_info->fps, 1, NULL);
 
 	g_object_set(GST_OBJECT(core->codec), "byte-stream", TRUE, NULL);
-	g_object_set(GST_OBJECT(core->codec), "bitrate", enc_info->bitrate*1000, NULL);
+	g_object_set(GST_OBJECT(core->codec), "bitrate", enc_info->bitrate, NULL);
 
 	LOGD("%s, %d, %d, %d", core->format, enc_info->width, enc_info->height, enc_info->fps);
 
@@ -651,7 +652,7 @@ int __mc_sprdenc_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *bu
 			"height", G_TYPE_INT, enc_info->height,
 			"framerate", GST_TYPE_FRACTION, enc_info->fps, 1, NULL);
 
-	g_object_set(GST_OBJECT(core->codec), "bitrate", enc_info->bitrate*1000, NULL);
+	g_object_set(GST_OBJECT(core->codec), "bitrate", enc_info->bitrate, NULL);
 
 	LOGD("%s, %d, %d, %d", core->format, enc_info->width, enc_info->height, enc_info->fps);
 
@@ -784,6 +785,7 @@ int __mc_aenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gbool
 			"format", G_TYPE_STRING, "F32LE",
 			"layout", G_TYPE_STRING, "interleaved", NULL);
 
+	g_object_set(GST_OBJECT(core->codec), "bitrate", enc_info->bitrate, NULL);
 	/*
 	   +----GstAudioEncoder
 	   +----avenc_aac
@@ -1298,8 +1300,6 @@ int __mc_set_caps_streamheader(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer*
 	return ret;
 }
 
-
-
 int __mc_set_caps_codecdata(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *buff, guint codecdata_size)
 {
 	int ret = MEDIA_PACKET_ERROR_NONE;
@@ -1416,8 +1416,8 @@ mc_gst_core_t *mc_gst_core_new()
 	core->need_sync_flag = false;
 	core->unprepare_flag = false;
 	core->prepare_count = 0;
-	core->queued_count = 0;
-	core->dequeued_count = 0;
+	core->etb_count = 0;
+	core->ftb_count = 0;
 
 	g_atomic_int_set(&core->available_queue->running, 1);
 	core->available_queue->thread = g_thread_new("feed thread", &feed_task, core);
@@ -1505,6 +1505,65 @@ void mc_gst_port_free(mc_gst_port_t *port)
 	return;
 }
 
+gboolean _mc_update_packet_info(mc_gst_core_t *core, media_format_h fmt)
+{
+	gboolean ret = FALSE;
+
+	mc_decoder_info_t *codec_info = (mc_decoder_info_t *)core->codec_info;
+
+	if (core->video) {
+		int width = 0;
+		int height = 0;
+		int bitrate = 0;
+
+		media_format_get_video_info(fmt, NULL, &width, &height, &bitrate, NULL);
+
+		if ((codec_info->width != width) || (codec_info->height != height)) {
+			LOGD("Resolution changed : %dx%d -> %dx%d",codec_info->width, codec_info->height, width, height);
+			codec_info->width = width;
+			codec_info->height = height;
+			ret = TRUE;
+		}
+
+		if (core->encoder) {
+			mc_encoder_info_t *enc_info = (mc_decoder_info_t *)core->codec_info;
+
+			if (enc_info->bitrate != bitrate) {
+				LOGD("Bitrate changed : %d -> %d",enc_info->bitrate, bitrate);
+				enc_info->bitrate = bitrate;
+				ret = TRUE;
+			}
+		}
+	} else {
+		int channel;
+		int samplerate;
+		int bit;
+		int bitrate;
+
+		media_format_get_audio_info(fmt, NULL, &channel, &samplerate, &bit, &bitrate);
+
+		if ((codec_info->channel != channel) || (codec_info->samplerate != samplerate) || (codec_info->bit != bit)) {
+			LOGD("Audio info. changed : %d -> %d, %d -> %d, %d -> %d", codec_info->channel, channel, codec_info->samplerate, samplerate, codec_info->bit, bit);
+			codec_info->channel = channel;
+			codec_info->samplerate = samplerate;
+			codec_info->bit = bit;
+			ret = TRUE;
+		}
+
+		if (core->encoder) {
+			mc_encoder_info_t *enc_info = (mc_decoder_info_t *)core->codec_info;
+
+			if (enc_info->bitrate != bitrate) {
+				LOGD("Bitrate changed : %d -> %d",enc_info->bitrate, bitrate);
+				enc_info->bitrate = bitrate;
+				ret = TRUE;
+			}
+		}
+	}
+
+	return ret;
+}
+
 static void _mc_gst_update_caps(mc_gst_core_t *core, media_packet_h pkt, GstCaps **caps, GstMCBuffer* buff, bool codec_config)
 {
 	/*TODO remove is_hw param*/
@@ -1531,6 +1590,7 @@ static gpointer feed_task(gpointer data)
 	int ret = MC_ERROR_NONE;
 	bool codec_config = FALSE;
 	bool eos = FALSE;
+	media_format_h fmt = NULL;
 	media_packet_h in_buf = NULL;
 	GstMCBuffer *buff = NULL;
 	GstCaps *new_caps = NULL;
@@ -1544,6 +1604,13 @@ static gpointer feed_task(gpointer data)
 
 		if (!in_buf)
 			goto LEAVE;
+
+		media_packet_get_format(in_buf,  &fmt);
+		if (fmt) {
+			if (_mc_update_packet_info(core, fmt))
+				initiative = TRUE;
+			media_format_unref(fmt);
+		}
 
 		if (media_packet_is_codec_config(in_buf, &codec_config) != MEDIA_PACKET_ERROR_NONE) {
 			LOGE("media_packet_is_codec_config failed");
@@ -1562,7 +1629,7 @@ static gpointer feed_task(gpointer data)
 		}
 
 		if (codec_config)
-			initiative = true;
+			initiative = TRUE;
 
 		if (initiative) {
 			GstPad *pad;
@@ -1919,7 +1986,7 @@ mc_ret_e mc_gst_process_input(mc_handle_t *mc_handle, media_packet_h inbuf, uint
 	   */
 
 	if (core->prepare_count == 0)
-		return MEDIACODEC_ERROR_INVALID_STATE;
+		return MC_INVALID_STATUS;
 
 	g_mutex_lock(&core->drain_lock);
 
@@ -1933,8 +2000,8 @@ mc_ret_e mc_gst_process_input(mc_handle_t *mc_handle, media_packet_h inbuf, uint
 	}
 
 	g_mutex_unlock(&core->drain_lock);
-	LOGI("@v(%d)e(%d)process_input(%d): %p", core->video, core->encoder, core->queued_count, inbuf);
-	core->queued_count++;
+	g_atomic_int_inc(&core->etb_count);
+	LOGI("@v(%d)e(%d)process_input(%d): %p", core->video, core->encoder, core->etb_count, inbuf);
 
 	MEDIACODEC_FLEAVE();
 
@@ -1964,6 +2031,7 @@ mc_ret_e mc_gst_get_output(mc_handle_t *mc_handle, media_packet_h *outbuf, uint6
 		ret = MC_OUTPUT_BUFFER_EMPTY;
 		LOGD("output_queue is empty");
 	}
+
 	*outbuf = out_pkt;
 
 	g_mutex_unlock(&core->ports[1]->mutex);
@@ -2273,7 +2341,6 @@ void __mc_gst_buffer_add(GstElement *element, GstBuffer *buffer, GstPad *pad, gp
 	LOGI("@%p(%d) out_pkt : %p", core, core->encoder, out_pkt);
 	gst_memory_unmap(mem, &map);
 
-
 	if (out_pkt) {
 		media_packet_set_extra(out_pkt, buffer);
 		media_packet_set_pts(out_pkt, GST_BUFFER_TIMESTAMP(buffer));
@@ -2289,11 +2356,19 @@ void __mc_gst_buffer_add(GstElement *element, GstBuffer *buffer, GstPad *pad, gp
 		}
 
 		g_mutex_lock(&core->ports[1]->mutex);
+
+		if (g_atomic_int_get(&core->ftb_count) > MAX_DQNUM) {
+			LOGW("packets are not destroyed. packet will be dropped");
+			media_packet_destroy(out_pkt);
+			g_mutex_unlock(&core->ports[1]->mutex);
+			return;
+		}
+
 		/* push it to output buffer queue */
 		g_queue_push_tail(core->ports[1]->queue, out_pkt);
 
-		core->dequeued_count++;
-		LOGD("dequeued : %d", core->dequeued_count);
+		g_atomic_int_inc(&core->ftb_count);
+		LOGD("dequeued : %d", core->ftb_count);
 		LOGD("GST_BUFFER_TIMESTAMP = %"GST_TIME_FORMAT, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buffer)));
 
 		g_mutex_unlock(&core->ports[1]->mutex);
@@ -2318,8 +2393,11 @@ int __mc_output_buffer_finalize_cb(media_packet_h packet, int error_code, void *
 	GstMapInfo map = GST_MAP_INFO_INIT;
 	MMVideoBuffer *mm_video_buf = NULL;
 
+	MEDIACODEC_FENTER();
 
-	LOGD("packet finalized: %p", packet);
+	mc_gst_core_t *core = (mc_gst_core_t *)user_data;
+
+	g_atomic_int_dec_and_test(&core->ftb_count);
 	media_packet_get_extra(packet, &buffer);
 
 	n = gst_buffer_n_memory(buffer);
@@ -2340,6 +2418,9 @@ int __mc_output_buffer_finalize_cb(media_packet_h packet, int error_code, void *
 		gst_memory_unmap(mem, &map);
 	}
 	gst_buffer_unref((GstBuffer *)buffer);
+	LOGD("output port filled buffer %p(%d)", packet, core->ftb_count);
+
+	MEDIACODEC_FLEAVE();
 
 	return MEDIA_PACKET_FINALIZE;
 }
@@ -2616,19 +2697,24 @@ static MMVideoBuffer *__mc_gst_make_tbm_buffer(mc_gst_core_t* core, media_packet
 
 static void gst_mediacodec_buffer_finalize(GstMCBuffer *mc_buffer)
 {
+	MEDIACODEC_FENTER();
+
 	if (!mc_buffer)
 		return;
 
 	mc_gst_core_t *core = (mc_gst_core_t *)mc_buffer->core;
 
+	g_atomic_int_dec_and_test(&core->etb_count);
 	if (core->user_cb[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER]) {
 		((mc_empty_buffer_cb) core->user_cb[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER])
 			(mc_buffer->pkt, core->user_data[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER]);
 	}
 
-	LOGD("%p(%p) buffer finalized...", mc_buffer, mc_buffer->pkt);
+	LOGD("input port emptied buffer %p(%d)", mc_buffer->pkt, core->etb_count);
 	free(mc_buffer);
 	mc_buffer = NULL;
+
+	MEDIACODEC_FLEAVE();
 
 	return;
 }
@@ -2796,6 +2882,7 @@ static gint __gst_transform_gsterror(mc_gst_core_t *core, GstMessage * message, 
 
 	switch (error->code) {
 	case GST_STREAM_ERROR_DECODE:
+	case GST_STREAM_ERROR_FAILED:
 		return MEDIACODEC_ERROR_INVALID_STREAM;
 		break;
 
@@ -2805,11 +2892,8 @@ static gint __gst_transform_gsterror(mc_gst_core_t *core, GstMessage * message, 
 		return MEDIACODEC_ERROR_NOT_SUPPORTED_FORMAT;
 		break;
 
-	case GST_STREAM_ERROR_FAILED:
-		return MEDIACODEC_ERROR_NOT_SUPPORTED_FORMAT;
-		break;
-
 	default:
+		return MEDIACODEC_ERROR_INTERNAL;
 		break;
 	}
 
@@ -2861,7 +2945,7 @@ static void _mc_gst_set_flush_input(mc_gst_core_t *core)
 	}
 
 	mc_async_queue_flush(core->available_queue->input);
-	core->queued_count = 0;
+	g_atomic_int_set(&core->etb_count, 0);
 }
 
 static void _mc_gst_set_flush_output(mc_gst_core_t *core)
@@ -2871,7 +2955,7 @@ static void _mc_gst_set_flush_output(mc_gst_core_t *core)
 	MEDIACODEC_FENTER();
 	g_mutex_lock(&core->ports[1]->mutex);
 
-	while (!g_queue_is_empty(core->ports[1]->queue))	{
+	while (!g_queue_is_empty(core->ports[1]->queue)) {
 		pkt = g_queue_pop_head(core->ports[1]->queue);
 		LOGD("outpkt in output_queue : %p", pkt);
 		if (pkt) {
@@ -2880,7 +2964,7 @@ static void _mc_gst_set_flush_output(mc_gst_core_t *core)
 			pkt = NULL;
 		}
 	}
-	core->dequeued_count = 0;
+	g_atomic_int_set(&core->ftb_count, 0);
 	g_mutex_unlock(&core->ports[1]->mutex);
 	MEDIACODEC_FLEAVE();
 }
