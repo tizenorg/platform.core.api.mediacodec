@@ -129,8 +129,8 @@ struct _mc_gst_core_t
     bool unprepare_flag;
     unsigned int prepare_count;
     unsigned int num_live_buffers;
-    unsigned int queued_count;
-    unsigned int dequeued_count;
+    unsigned int etb_count;
+    unsigned int ftb_count;
 
 
     mediacodec_codec_type_e codec_id;

@@ -205,7 +205,7 @@ int mc_set_venc_info(MMHandleType mediacodec, int width, int height, int fps, in
 	mc_handle->info.encoder.width = width;
 	mc_handle->info.encoder.height = height;
 	mc_handle->info.encoder.fps = fps;
-	mc_handle->info.encoder.bitrate = target_bits;
+	mc_handle->info.encoder.bitrate = target_bits * 1000;
 	mc_handle->is_prepared = true;
 
 	return ret;
@@ -254,7 +254,7 @@ int mc_set_aenc_info(MMHandleType mediacodec, int samplerate, int channel, int b
 	mc_handle->info.encoder.samplerate = samplerate;
 	mc_handle->info.encoder.channel = channel;
 	mc_handle->info.encoder.bit = bit;
-	mc_handle->info.encoder.bitrate = bitrate;
+	mc_handle->info.encoder.bitrate = bitrate * 1000;
 
 	mc_handle->is_prepared = true;
 
@@ -331,6 +331,11 @@ int mc_process_input(MMHandleType mediacodec, media_packet_h inbuf, uint64_t tim
 	if (!mc_handle) {
 		LOGE("fail invaild param");
 		return MC_INVALID_ARG;
+	}
+
+	if (!inbuf) {
+		LOGE("invaild input buffer");
+		return MC_INVALID_IN_BUF;
 	}
 
 	switch (mc_handle->port_type) {
