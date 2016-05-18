@@ -1407,6 +1407,7 @@ mc_gst_core_t *mc_gst_core_new()
 
 	g_mutex_init(&core->eos_mutex);
 	g_cond_init(&core->eos_cond);
+	g_cond_init(&core->buffer_cond);
 	g_mutex_init(&core->prepare_lock);
 	g_mutex_init(&core->drain_lock);
 
@@ -1448,6 +1449,7 @@ void mc_gst_core_free(mc_gst_core_t *core)
 	g_mutex_clear(&core->prepare_lock);
 	g_mutex_clear(&core->drain_lock);
 	g_cond_clear(&core->eos_cond);
+	g_cond_clear(&core->buffer_cond);
 
 	mc_async_queue_free(async_queue->input);
 	g_free(async_queue);
@@ -1972,18 +1974,33 @@ mc_ret_e mc_gst_process_input(mc_handle_t *mc_handle, media_packet_h inbuf, uint
 	int ret = MC_ERROR_NONE;
 	mc_gst_core_t *core = NULL;
 	GTimeVal nowtv;
+	GstClockTime max_sleep;
 
 	if (!mc_handle)
 		return MC_PARAM_ERROR;
 
 	core = (mc_gst_core_t *)mc_handle->core;
 
-	g_get_current_time(&nowtv);
-	g_time_val_add(&nowtv, 500 * 1000);   /* usec */
-	/*
-	   if (!g_cond_timed_wait(&nowtv)) {
-	   }
-	   */
+	g_mutex_lock(&core->drain_lock);
+
+	/* To avoid excessive buffer queueing */
+	while (g_atomic_int_get(&core->etb_count) > MAXINUM_QNUM) {
+		/* still be processing, queuing packet will be blocked until packets have been dropped below THRESHOLD_QNUM */
+		max_sleep = timeOutUs * GST_USECOND;
+		g_get_current_time(&nowtv);
+		LOGD("Waiting until packets are drained..");
+		g_time_val_add(&nowtv, timeOutUs * 1000);   /* usec */
+		if (timeOutUs == -1) {
+			g_cond_wait(&core->buffer_cond, &core->drain_lock);
+			LOGD("Waking up early due to flush");
+			break;
+		} else {
+			g_cond_timed_wait(&core->buffer_cond, &core->drain_lock, &nowtv);
+			LOGD("Waking up early due to flush");
+			break;
+		}
+	}
+	g_mutex_unlock(&core->drain_lock);
 
 	if (core->prepare_count == 0)
 		return MC_INVALID_STATUS;
@@ -2705,6 +2722,11 @@ static void gst_mediacodec_buffer_finalize(GstMCBuffer *mc_buffer)
 			(mc_buffer->pkt, core->user_data[_MEDIACODEC_EVENT_TYPE_EMPTYBUFFER]);
 	}
 
+	if (core->etb_count < THRESHOLD_QNUM) {
+		g_cond_signal(&core->buffer_cond);
+		LOGD("emited signal because we had no more excessive buffers");
+	}
+
 	LOGD("@v(%d)e(%d)input port emptied buffer(%d): %p", core->video, core->encoder, core->etb_count, mc_buffer->pkt);
 	free(mc_buffer);
 	mc_buffer = NULL;
@@ -2943,6 +2965,7 @@ static void _mc_gst_set_flush_input(mc_gst_core_t *core)
 	}
 
 	mc_async_queue_flush(core->available_queue->input);
+	g_cond_signal(&core->buffer_cond);
 	MEDIACODEC_FLEAVE();
 }
 

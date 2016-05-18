@@ -981,7 +981,7 @@ static gboolean read_data(App *app)
 		}
 		mc_hex_dump("inbuf", tmp, 48);
 
-		ret = mediacodec_process_input(app->mc_handle[0], pkt, 0);
+		ret = mediacodec_process_input(app->mc_handle[0], pkt, -1);
 		if (ret != MEDIACODEC_ERROR_NONE)
 			return FALSE;
 

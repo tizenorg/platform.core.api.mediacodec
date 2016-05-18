@@ -51,6 +51,9 @@ extern "C" {
 #define SCMN_IMGB_MAX_PLANE 4
 #define TBM_API_CHANGE
 #define DEFAULT_POOL_SIZE 20
+#define MAXINUM_QNUM	15
+#define THRESHOLD_QNUM	5
+
 
 /* gst port layer */
 typedef struct _mc_gst_port_t mc_gst_port_t;
@@ -112,6 +115,7 @@ struct _mc_gst_core_t
     GMutex eos_wait_mutex;
     GMutex prepare_lock;
     GMutex drain_lock;
+    GCond buffer_cond;
     GCond eos_cond;
     GCond eos_waiting_cond;
 
