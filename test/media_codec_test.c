@@ -23,6 +23,7 @@
 
 #include <media_codec.h>
 #include <media_packet.h>
+#include <media_packet_pool.h>
 #include <tbm_surface.h>
 #include <dlog.h>
 #include <time.h>
@@ -54,7 +55,6 @@
 
 #define AAC_CODECDATA_SIZE    16
 
-static int samplebyte = DEFAULT_SAMPLEBYTE;
 unsigned char buf_adts[ADTS_HEADER_SIZE];
 
 enum {
@@ -132,6 +132,8 @@ struct _App {
 	bool is_video[MAX_HANDLE];
 	bool is_encoder[MAX_HANDLE];
 	bool hardware;
+	bool enable_dump;
+	int frame;
 	type_e type;
 	/* video */
 	mediacodec_h mc_handle[MAX_HANDLE];
@@ -162,14 +164,8 @@ struct _App {
 
 App s_app;
 
-media_format_h aenc_fmt = NULL;
-media_format_h adec_fmt = NULL;
-media_format_h vdec_fmt = NULL;
-media_format_h venc_fmt = NULL;
-
-#if DUMP_OUTBUF
-FILE *fp_out = NULL;
-#endif
+media_format_h fmt = NULL;
+media_packet_pool_h pkt_pool = NULL;
 
 /* Internal Functions */
 static int _create_app(void *data);
@@ -177,11 +173,11 @@ static int _terminate_app(void *data);
 static void displaymenu(void);
 static void display_sub_basic();
 
+static void _mediacodec_unprepare(App *app);
 /* For debugging */
 static void mc_hex_dump(char *desc, void *addr, int len);
-#if DUMP_OUTBUF
 static void decoder_output_dump(App *app, media_packet_h pkt);
-#endif
+static void output_dump(App *app, media_packet_h pkt);
 /* */
 
 void (*extractor)(App *app, unsigned char** data, int *size, bool *have_frame);
@@ -335,12 +331,10 @@ void h263_extractor(App * app, unsigned char **data, int *size, bool * have_fram
 	unsigned char *pH263 = app->data + app->offset;
 	*data = pH263;
 	int max = app->length - app->offset;
-	*have_frame = TRUE;
 
 	while (1) {
 		if (len >= max) {
 			read_size = (len - 1);
-			*have_frame = FALSE;
 			goto DONE;
 		}
 		val = pH263[len++];
@@ -371,6 +365,7 @@ void h263_extractor(App * app, unsigned char **data, int *size, bool * have_fram
  DONE:
 	*size = read_size;
 	app->offset += read_size;
+	*have_frame = TRUE;
 }
 
 void mpeg4_extractor(App * app, unsigned char **data, int *size, bool * have_frame)
@@ -385,7 +380,7 @@ void mpeg4_extractor(App * app, unsigned char **data, int *size, bool * have_fra
 
 	while (1) {
 		if (len >= max) {
-			*have_frame = FALSE;
+			result = (len - 1);
 			goto DONE;
 		}
 
@@ -435,6 +430,7 @@ void mpeg4_extractor(App * app, unsigned char **data, int *size, bool * have_fra
   *  - AMR-NB  : mime type ("audio/AMR")          /   8Khz / 1 ch / 16 bits
   *  - AMR-WB : mime type ("audio/AMR-WB")  / 16Khz / 1 ch / 16 bits
   **/
+int write_amr_header = 1;                   /* write  magic number for AMR Header at one time */
 static const char AMR_header[] = "#!AMR\n";
 static const char AMRWB_header[] = "#!AMR-WB\n";
 #define AMR_NB_MIME_HDR_SIZE          6
@@ -529,12 +525,12 @@ void aacenc_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 	int read_size;
 	int offset = app->length - app->offset;
 
-	read_size = ((samplebyte*app->channel)*(app->bit/8));
-
+	read_size = ((DEFAULT_SAMPLEBYTE * app->channel)*(app->bit/8) * 2);
 
 	*have_frame = TRUE;
+	*data = app->data + app->offset;
 
-	if (offset >= read_size)
+	if (read_size >= offset)
 		*size = offset;
 	else
 		*size = read_size;
@@ -553,8 +549,9 @@ void amrenc_extractor(App *app, unsigned char **data, int *size, bool *have_fram
 		read_size = AMRWB_PCM_INPUT_SIZE;
 
 	*have_frame = TRUE;
+	*data = app->data + app->offset;
 
-	if (offset >= read_size)
+	if (read_size >= offset)
 		*size = offset;
 	else
 		*size = read_size;
@@ -818,7 +815,7 @@ static void _mediacodec_empty_buffer_cb(media_packet_h pkt, void *user_data)
 	return;
 }
 #endif
-int  _mediacodec_set_codec(int codecid, int flag, bool *hardware)
+int  _mediacodec_set_codec(App *app, int codecid, int flag, bool *hardware)
 {
 	bool encoder;
 	media_format_mimetype_e mime = 0;
@@ -890,18 +887,104 @@ int  _mediacodec_set_codec(int codecid, int flag, bool *hardware)
 	case MEDIACODEC_WMALSL:
 		break;
 	case MEDIACODEC_AMR_NB:
-		extractor = amrdec_extractor;
-		mime = MEDIA_FORMAT_AMR_NB;
+		if (encoder) {
+			extractor = amrenc_extractor;
+			mime = MEDIA_FORMAT_PCM;
+			app->is_amr_nb = TRUE;
+		} else {
+			extractor = amrdec_extractor;
+			mime = MEDIA_FORMAT_AMR_NB;
+		}
 		break;
 	case MEDIACODEC_AMR_WB:
-		extractor = amrdec_extractor;
-		mime = MEDIA_FORMAT_AMR_WB;
+		if (encoder) {
+			extractor = amrenc_extractor;
+			mime = MEDIA_FORMAT_PCM;
+			app->is_amr_nb = FALSE;
+		} else {
+			extractor = amrdec_extractor;
+			mime = MEDIA_FORMAT_AMR_WB;
+		}
 		break;
 	default:
 		LOGE("NOT SUPPORTED!!!!");
 		break;
 	}
 	return mime;
+}
+
+static void _mediacodec_process_input(App *app)
+{
+	int i;
+	bool have_frame = FALSE;
+	int ret;
+	static guint64 pts = 0L;
+	void *buf_data_ptr = NULL;
+	media_packet_h pkt = NULL;
+	unsigned char *tmp;
+	int read;
+	int offset;
+	int stride_width, stride_height;
+
+	for (i = 0; i < app->frame; i++) {
+		g_print("----------read data------------\n");
+
+		extractor(app, &tmp, &read, &have_frame);
+
+		if (have_frame) {
+			if (media_packet_create_alloc(fmt, NULL, NULL, &pkt) != MEDIA_PACKET_ERROR_NONE) {
+				fprintf(stderr, "media_packet_create_alloc failed\n");
+				return;
+			}
+
+			if (media_packet_set_pts(pkt, (uint64_t)(pts)) != MEDIA_PACKET_ERROR_NONE) {
+				fprintf(stderr, "media_packet_set_pts failed\n");
+				return;
+			}
+
+			if (app->type != VIDEO_ENC) {
+				media_packet_get_buffer_data_ptr(pkt, &buf_data_ptr);
+				media_packet_set_buffer_size(pkt, (uint64_t)read);
+
+				memcpy(buf_data_ptr, tmp, read);
+				g_print("tmp:%p, read:%d\n", tmp, read);
+			} else {
+				/* Y */
+				media_packet_get_video_plane_data_ptr(pkt, 0, &buf_data_ptr);
+				media_packet_get_video_stride_width(pkt, 0, &stride_width);
+				media_packet_get_video_stride_height(pkt, 0, &stride_height);
+
+				offset = stride_width*stride_height;
+
+				memcpy(buf_data_ptr, tmp, offset);
+
+				/* UV or U*/
+				media_packet_get_video_plane_data_ptr(pkt, 1, &buf_data_ptr);
+				media_packet_get_video_stride_width(pkt, 1, &stride_width);
+				media_packet_get_video_stride_height(pkt, 1, &stride_height);
+				memcpy(buf_data_ptr, tmp + offset, stride_width*stride_height);
+
+				if (app->hardware == FALSE) {
+					/* V */
+					media_packet_get_video_plane_data_ptr(pkt, 2, &buf_data_ptr);
+					media_packet_get_video_stride_width(pkt, 2, &stride_width);
+					media_packet_get_video_stride_height(pkt, 2, &stride_height);
+
+					offset += stride_width * stride_height;
+
+
+					memcpy(buf_data_ptr, tmp + offset, stride_width*stride_height);
+				}
+			}
+			mc_hex_dump("inbuf", tmp, 48);
+
+			ret = mediacodec_process_input(app->mc_handle[0], pkt, -1);
+			if (ret != MEDIACODEC_ERROR_NONE)
+				return;
+
+			pts += ES_DEFAULT_VIDEO_PTS_OFFSET;
+		}
+	}
 }
 
 static gboolean read_data(App *app)
@@ -917,14 +1000,20 @@ static gboolean read_data(App *app)
 	int offset;
 	int stride_width, stride_height;
 
+	if (app->offset == 0) {
+		app->frame_count = 0;
+		app->start = clock();
+	}
+
 	g_print("----------read data------------\n");
 	extractor(app, &tmp, &read, &have_frame);
 
-	if (app->offset >= app->length - 1) {
+	if (app->offset >= app->length - 4) {
 		/* EOS */
 		g_print("EOS\n");
 		app->finish = clock();
-		g_main_loop_quit(app->loop);
+		g_print("Average FPS = %3.3f\n", ((double)app->frame_count*1000000/(app->finish - app->start)));
+		g_print("---------------------------\n");
 		return FALSE;
 	}
 	g_print("length : %d, offset : %d\n", (int)app->length, (int)app->offset);
@@ -935,11 +1024,18 @@ static gboolean read_data(App *app)
 	g_print("%p, %d, have_frame :%d, read: %d\n", tmp, (int)read, have_frame, read);
 
 	if (have_frame) {
-		if (media_packet_create_alloc(vdec_fmt, NULL, NULL, &pkt) != MEDIA_PACKET_ERROR_NONE) {
+#ifdef USE_POOL
+		if (media_packet_pool_acquire_packet(pkt_pool, &pkt, -1) != MEDIA_PACKET_ERROR_NONE) {
+			fprintf(stderr, "media_packet_pool_aquire_packet failed\n");
+			//return TRUE;
+			return FALSE;
+		}
+#else
+		if (media_packet_create_alloc(fmt, NULL, NULL, &pkt) != MEDIA_PACKET_ERROR_NONE) {
 			fprintf(stderr, "media_packet_create_alloc failed\n");
 			return FALSE;
 		}
-
+#endif
 		if (media_packet_set_pts(pkt, (uint64_t)(pts)) != MEDIA_PACKET_ERROR_NONE) {
 			fprintf(stderr, "media_packet_set_pts failed\n");
 			return FALSE;
@@ -1011,7 +1107,12 @@ static void stop_feed(App *app)
 static gboolean _mediacodec_inbuf_used_cb(media_packet_h pkt, void *user_data)
 {
 	g_print("_mediacodec_inbuf_used_cb!!!\n");
+#ifdef USE_POOL
+	media_packet_pool_release_packet(pkt_pool, pkt);
+#else
 	media_packet_destroy(pkt);
+#endif
+
 	return TRUE;
 }
 
@@ -1031,19 +1132,12 @@ static bool _mediacodec_outbuf_available_cb(media_packet_h pkt, void *user_data)
 	if (ret != MEDIACODEC_ERROR_NONE)
 		g_print("get_output failed\n");
 
-#if DUMP_OUTBUF
-	void *data;
-	int buf_size;
-	int stride_width, stride_height;
-
-	decoder_output_dump(app, out_pkt);
-	media_packet_get_buffer_data_ptr(out_pkt, &data);
-	media_packet_get_buffer_size(out_pkt, &buf_size);
-	g_print("output data : %p, size %d\n", data, (int)buf_size);
-
-	fwrite(data, 1, buf_size, fp_out);
-
-#endif
+	if (app->enable_dump) {
+		if (app->type == VIDEO_DEC)
+			decoder_output_dump(app, out_pkt);
+		else
+			output_dump(app, out_pkt);
+	}
 
 	app->frame_count++;
 
@@ -1081,13 +1175,10 @@ static bool _mediacodec_eos_cb(void *user_data)
 	return TRUE;
 }
 
-static void _mediacodec_prepare(App *app)
+static void _mediacodec_prepare(App *app, bool frame_all)
 {
 	int ret;
 
-#if DUMP_OUTBUF
-	fp_out = fopen("/tmp/codec_dump.out", "wb");
-#endif
 	/* create instance */
 	ret = mediacodec_create(&app->mc_handle[0]);
 	if (ret  != MEDIACODEC_ERROR_NONE) {
@@ -1102,39 +1193,38 @@ static void _mediacodec_prepare(App *app)
 		return;
 	}
 
-
-	app->mime = _mediacodec_set_codec(app->codecid, app->flag, &app->hardware);
+	app->mime = _mediacodec_set_codec(app, app->codecid, app->flag, &app->hardware);
 
 	/* set codec info */
-	ret = media_format_create(&vdec_fmt);
+	ret = media_format_create(&fmt);
 
 	switch (app->type) {
 	case VIDEO_DEC:
 		ret = mediacodec_set_vdec_info(app->mc_handle[0], app->width, app->height);
-		media_format_set_video_mime(vdec_fmt, app->mime);
-		media_format_set_video_width(vdec_fmt, app->width);
-		media_format_set_video_height(vdec_fmt, app->height);
+		media_format_set_video_mime(fmt, app->mime);
+		media_format_set_video_width(fmt, app->width);
+		media_format_set_video_height(fmt, app->height);
 		break;
 	case VIDEO_ENC:
 		ret = mediacodec_set_venc_info(app->mc_handle[0], app->width, app->height, app->fps, app->target_bits);
-		media_format_set_video_mime(vdec_fmt, app->mime);
-		media_format_set_video_width(vdec_fmt, app->width);
-		media_format_set_video_height(vdec_fmt, app->height);
-		media_format_set_video_avg_bps(vdec_fmt, app->target_bits);
+		media_format_set_video_mime(fmt, app->mime);
+		media_format_set_video_width(fmt, app->width);
+		media_format_set_video_height(fmt, app->height);
+		media_format_set_video_avg_bps(fmt, app->target_bits);
 		break;
 	case AUDIO_DEC:
 		ret = mediacodec_set_adec_info(app->mc_handle[0], app->samplerate, app->channel, app->bit);
-		media_format_set_audio_mime(vdec_fmt, app->mime);
-		media_format_set_audio_channel(vdec_fmt, app->channel);
-		media_format_set_audio_samplerate(vdec_fmt, app->samplerate);
-		media_format_set_audio_bit(vdec_fmt, app->bit);
+		media_format_set_audio_mime(fmt, app->mime);
+		media_format_set_audio_channel(fmt, app->channel);
+		media_format_set_audio_samplerate(fmt, app->samplerate);
+		media_format_set_audio_bit(fmt, app->bit);
 		break;
 	case AUDIO_ENC:
 		ret = mediacodec_set_aenc_info(app->mc_handle[0], app->samplerate, app->channel, app->bit, app->bitrate);
-		media_format_set_audio_mime(vdec_fmt, app->mime);
-		media_format_set_audio_channel(vdec_fmt, app->channel);
-		media_format_set_audio_samplerate(vdec_fmt, app->samplerate);
-		media_format_set_audio_bit(vdec_fmt, app->bit);
+		media_format_set_audio_mime(fmt, app->mime);
+		media_format_set_audio_channel(fmt, app->channel);
+		media_format_set_audio_samplerate(fmt, app->samplerate);
+		media_format_set_audio_bit(fmt, app->bit);
 		break;
 	default:
 		g_print("invaild type\n");
@@ -1149,7 +1239,8 @@ static void _mediacodec_prepare(App *app)
 	/* set callback */
 	mediacodec_set_input_buffer_used_cb(app->mc_handle[0], (mediacodec_input_buffer_used_cb)_mediacodec_inbuf_used_cb, NULL);
 	mediacodec_set_output_buffer_available_cb(app->mc_handle[0], (mediacodec_output_buffer_available_cb) _mediacodec_outbuf_available_cb, app);
-	mediacodec_set_buffer_status_cb(app->mc_handle[0], (mediacodec_buffer_status_cb) _mediacodec_buffer_status_cb, app);
+	if (frame_all)
+		mediacodec_set_buffer_status_cb(app->mc_handle[0], (mediacodec_buffer_status_cb) _mediacodec_buffer_status_cb, app);
 	mediacodec_set_eos_cb(app->mc_handle[0], (mediacodec_eos_cb)_mediacodec_eos_cb, NULL);
 	mediacodec_set_error_cb(app->mc_handle[0], (mediacodec_error_cb)_mediacodec_error_cb, NULL);
 
@@ -1160,15 +1251,42 @@ static void _mediacodec_prepare(App *app)
 		return;
 	}
 
-	app->frame_count = 0;
-	app->start = clock();
-	g_main_loop_run(app->loop);
 
-	g_print("Average FPS = %3.3f\n", ((double)app->frame_count*1000000/(app->finish - app->start)));
+/* get packet pool instance */
+        ret = mediacodec_get_packet_pool(app->mc_handle[0], &pkt_pool);
 
-	g_print("---------------------------\n");
-
+	if (ret != MEDIA_PACKET_ERROR_NONE) {
+		g_print("mediacodec_get_packet_pool failed\n");
+		return;
+	}
 	return;
+}
+
+static void _mediacodec_unprepare(App *app)
+{
+	mediacodec_unprepare(app->mc_handle[0]);
+}
+
+static void _mediacodec_destroy(App *app)
+{
+#ifdef USE_POOL
+	if (media_packet_pool_deallocate(pkt_pool) != MEDIA_PACKET_ERROR_NONE) {
+
+		fprintf(stderr, "media_packet_pool_deallocatet failed\n");
+		g_print("PKT POOL deallocation failed \n");
+		return;
+	}
+	g_print("PKT POOL deallocated! \n");
+
+	if (media_packet_pool_destroy(pkt_pool) != MEDIA_PACKET_ERROR_NONE) {
+
+		fprintf(stderr, " media_packet_pool_destroy failed\n");
+		g_print("PKT POOL destroy failed \n");
+		return;
+	}
+	g_print("PKT POOL destroyed! \n");
+#endif
+	mediacodec_destroy(app->mc_handle[0]);
 }
 
 static void input_filepath(char *filename, App *app)
@@ -1191,12 +1309,10 @@ static void input_filepath(char *filename, App *app)
 	return;
 }
 
-void quit_program()
+void quit_program(App *app)
 {
-#if DUMP_OUTBUF
-	if (fp_out)
-		fclose(fp_out);
-#endif
+		media_format_unref(fmt);
+		g_main_loop_quit(app->loop);
 		elm_exit();
 
 }
@@ -1216,12 +1332,14 @@ void _interpret_main_menu(char *cmd, App *app)
 		else if (strncmp(cmd, "o", 1) == 0)
 			g_menu_state = CURRENT_STATUS_GET_OUTPUT;
 		else if (strncmp(cmd, "q", 1) == 0)
-			quit_program();
+			quit_program(app);
 		else
 			g_print("unknown menu \n");
 	} else if (len == 2) {
 		if (strncmp(cmd, "pr", 2) == 0)
-			_mediacodec_prepare(app);
+			_mediacodec_prepare(app, 0);
+		else if (strncmp(cmd, "pa", 2) == 0)
+			_mediacodec_prepare(app, 1);
 		else if (strncmp(cmd, "sc", 2) == 0)
 			g_menu_state = CURRENT_STATUS_SET_CODEC;
 		else if (strncmp(cmd, "vd", 2) == 0)
@@ -1234,7 +1352,19 @@ void _interpret_main_menu(char *cmd, App *app)
 			g_menu_state = CURRENT_STATUS_SET_AENC_INFO;
 		else if (strncmp(cmd, "pi", 2) == 0)
 			g_menu_state = CURRENT_STATUS_PROCESS_INPUT;
-		else
+		else if (strncmp(cmd, "un", 2) == 0)
+			_mediacodec_unprepare(app);
+		else if (strncmp(cmd, "dt", 2) == 0)
+			_mediacodec_destroy(app);
+		else if (strncmp(cmd, "dp", 2) == 0) {
+			if(!app->enable_dump) {
+				app->enable_dump = TRUE;
+				g_print("dump enabled\n");
+			} else {
+				app->enable_dump = FALSE;
+				g_print("dump disabled\n");
+			}
+		} else
 			display_sub_basic();
 	} else {
 		g_print("unknown menu \n");
@@ -1448,6 +1578,8 @@ static void interpret(char *cmd, App *app)
 	break;
 	case CURRENT_STATUS_PROCESS_INPUT:
 	{
+		app->frame = atoi(cmd);
+		_mediacodec_process_input(app);
 		reset_menu_state();
 	}
 	break;
@@ -1475,14 +1607,15 @@ static void display_sub_basic()
 	g_print("ve. Set venc info \n");
 	g_print("ad. Set adec info \t");
 	g_print("ae. Set aenc info \n");
-	g_print("pr. Prepare \t\t");
-	g_print("pi. Process input \n");
+	g_print("pr. Prepare \t");
+	g_print("pa. Prepare and process all\t\t");
+	g_print("pi. process input with num\n");
 	g_print("o. Get output \t\t");
 	g_print("rb. Reset output buffer \n");
-	g_print("pa. Process all frames \n");
 	g_print("un. Unprepare \t\t");
 	g_print("dt. Destroy \t\t");
-	g_print("q. quite test suite \t");
+	g_print("q. quite test suite \n");
+	g_print("dp. enable dump \n");
 	g_print("\n");
 	g_print("=========================================================================================\n");
 }
@@ -1512,10 +1645,13 @@ int main(int argc, char *argv[])
 	g_io_add_watch(stdin_channel, G_IO_IN, (GIOFunc)input, app);
 
 
+	displaymenu();
 	app->loop = g_main_loop_new(NULL, TRUE);
 	app->timer = g_timer_new();
+	//app->frame_count = 0;
+	g_main_loop_run(app->loop);
 
-	displaymenu();
+
 
 	ops.data = app;
 
@@ -1558,7 +1694,6 @@ void mc_hex_dump(char *desc, void *addr, int len)
 	printf("  %s\n", buff);
 }
 
-#if DUMP_OUTBUF
 static void decoder_output_dump(App *app, media_packet_h pkt)
 {
 	void *temp;
@@ -1608,4 +1743,73 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
 	fclose(fp);
 
 }
-#endif
+
+/**
+ *  Add ADTS header at the beginning of each and every AAC packet.
+ *  This is needed as MediaCodec encoder generates a packet of raw AAC data.
+ *  Note the packetLen must count in the ADTS header itself.
+ **/
+void add_adts_header_for_aacenc(App *app, char *buffer, int packetLen) {
+    int profile = 2;    //AAC LC (0x01)
+    int freqIdx = 3;    //48KHz (0x03)
+    int chanCfg = 2;    //CPE (0x02)
+
+    if (app->samplerate == 96000) freqIdx = 0;
+    else if (app->samplerate == 88200) freqIdx = 1;
+    else if (app->samplerate == 64000) freqIdx = 2;
+    else if (app->samplerate == 48000) freqIdx = 3;
+    else if (app->samplerate == 44100) freqIdx = 4;
+    else if (app->samplerate == 32000) freqIdx = 5;
+    else if (app->samplerate == 24000) freqIdx = 6;
+    else if (app->samplerate == 22050) freqIdx = 7;
+    else if (app->samplerate == 16000) freqIdx = 8;
+    else if (app->samplerate == 12000) freqIdx = 9;
+    else if (app->samplerate == 11025) freqIdx = 10;
+    else if (app->samplerate == 8000) freqIdx = 11;
+
+    if ((app->channel == 1) || (app->channel == 2))
+        chanCfg = app->channel;
+
+    // fill in ADTS data
+    buffer[0] = (char)0xFF;
+    buffer[1] = (char)0xF1;
+    buffer[2] = (char)(((profile-1)<<6) + (freqIdx<<2) +(chanCfg>>2));
+    buffer[3] = (char)(((chanCfg&3)<<6) + (packetLen>>11));
+    buffer[4] = (char)((packetLen&0x7FF) >> 3);
+    buffer[5] = (char)(((packetLen&7)<<5) + 0x1F);
+    buffer[6] = (char)0xFC;
+}
+
+static void output_dump(App *app, media_packet_h pkt)
+{
+	void *temp;
+	uint64_t buf_size;
+	char filename[100] = {0};
+	FILE *fp = NULL;
+	int ret = 0;
+	char adts[100] = {0, };
+
+	sprintf(filename, "/tmp/dec_output_dump_%d.out", app->type);
+	fp = fopen(filename, "ab");
+
+	media_packet_get_buffer_data_ptr(pkt, &temp);
+	media_packet_get_buffer_size(pkt, &buf_size);
+	g_print("output data : %p, size %d\n", temp, (int)buf_size);
+
+	if (buf_size > 0 && app->codecid == MEDIACODEC_AAC_LC) {
+		add_adts_header_for_aacenc(app, adts, (buf_size + ADTS_HEADER_SIZE));
+		fwrite(&adts, 1, ADTS_HEADER_SIZE, fp);
+		g_print("adts appended\n");
+	} else if (buf_size > 0 && app->codecid == MEDIACODEC_AMR_NB && write_amr_header == 1)	{
+		/* This is used only AMR encoder case for adding AMR masic header in only first frame */
+		g_print("%s - AMR_header write in first frame\n",__func__);
+		fwrite(&AMR_header[0], 1, sizeof(AMR_header)   - 1, fp);         /* AMR-NB magic number */
+		write_amr_header = 0;
+	}
+
+	fwrite(temp, (int)buf_size, 1, fp);
+
+	g_print("codec dec output dumped!!%d\n", ret);
+	fclose(fp);
+
+}
