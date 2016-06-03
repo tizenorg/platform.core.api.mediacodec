@@ -117,9 +117,9 @@ struct _App {
 
 	GMappedFile *file;
 	guint8 *data;
-	gsize length;
-	guint64 offset;
-	guint obj;
+	gint length;
+	gint offset;
+	gint obj;
 
 	GTimer *timer;
 	long start;
@@ -1016,7 +1016,7 @@ static gboolean read_data(App *app)
 		g_print("---------------------------\n");
 		return FALSE;
 	}
-	g_print("length : %d, offset : %d\n", (int)app->length, (int)app->offset);
+	g_print("length : %d, offset : %d\n", app->length, app->offset);
 
 	if (app->offset + len > app->length)
 		len = app->length - app->offset;
@@ -1304,7 +1304,7 @@ static void input_filepath(char *filename, App *app)
 	app->length = g_mapped_file_get_length(app->file);
 	app->data = (guint8 *)g_mapped_file_get_contents(app->file);
 	app->offset = 0;
-	g_print("len : %d, offset : %d, obj : %d", app->length, (int)app->offset, app->obj);
+	g_print("len : %d, offset : %d, obj : %d", app->length, app->offset, app->obj);
 
 	return;
 }
