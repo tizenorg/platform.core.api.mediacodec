@@ -19,6 +19,8 @@
 
 #include <glib.h>
 #include <mm_types.h>
+#include <media_codec.h>
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +36,12 @@ extern "C" {
 #define MEDIA_CODEC_MAX_VIDEO_CODEC 100
 #define MEDIA_CODEC_MAX_AUDIO_CODEC 100
 
+typedef struct _codec_list_t codec_list_t;
+
+struct _codec_list_t {
+	gchar cname[MEDIA_CODEC_INI_MAX_STRLEN];
+	mediacodec_codec_type_e ctype;
+};
 
 typedef enum {
     GST_PORT = 0,
@@ -55,6 +63,7 @@ typedef struct {
 
 /* @ mark means the item has tested */
 typedef struct __mc_ini {
+	int codec_list;
     port_mode port_type;
     /* general */
     gchar port_name[MEDIA_CODEC_INI_MAX_STRLEN];
@@ -96,6 +105,8 @@ media_codec_port = GST_PORT \n\
 "
 
 int mc_ini_load(mc_ini_t *ini);
+media_format_mimetype_e _mc_convert_media_format_str_to_int(char *sformat);
+
 
 #ifdef __cplusplus
 }

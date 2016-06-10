@@ -257,6 +257,10 @@ int mc_unset_buffer_status_cb(MMHandleType mediacodec);
 int mc_set_supported_codec_cb(MMHandleType mediacodec, mediacodec_supported_codec_cb callback, void* user_data);
 int _mediacodec_foreach_supported_codec(MMHandleType mediacodec, mediacodec_supported_codec_cb callback, void* user_data);
 
+void _mc_create_codec_map_from_ini(mc_handle_t *mc_handle, mc_codec_spec_t *spec_emul);
+void _mc_create_decoder_map_from_ini(mc_handle_t *mc_handle);
+void _mc_create_encoder_map_from_ini(mc_handle_t *mc_handle);
+
 #ifdef __cplusplus
 }
 #endif
