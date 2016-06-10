@@ -19,6 +19,8 @@
 
 #include <glib.h>
 #include <mm_types.h>
+#include <media_codec.h>
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,32 +36,42 @@ extern "C" {
 #define MEDIA_CODEC_MAX_VIDEO_CODEC 100
 #define MEDIA_CODEC_MAX_AUDIO_CODEC 100
 
+typedef struct _codec_list_t codec_list_t;
+typedef struct _codec_info_t codec_info_t;
+typedef struct _codec_t codec_t;
+typedef struct _mc_ini_t mc_ini_t;
+
+struct _codec_list_t {
+	gchar cname[MEDIA_CODEC_INI_MAX_STRLEN];
+	mediacodec_codec_type_e ctype;
+};
 
 typedef enum {
-    GST_PORT = 0,
-    FFMPEG_PORT,
-    CUSTOM_PORT,
+	GST_PORT = 0,
+	FFMPEG_PORT,
+	CUSTOM_PORT,
 } port_mode;
 
-typedef struct {
-    gchar name[MEDIA_CODEC_INI_MAX_STRLEN];
-    gchar mime[MEDIA_CODEC_INI_MAX_STRLEN];
-    gchar format[MEDIA_CODEC_INI_MAX_STRLEN];
-} codec_info_t;
+struct _codec_info_t {
+	gchar name[MEDIA_CODEC_INI_MAX_STRLEN];
+	gchar mime[MEDIA_CODEC_INI_MAX_STRLEN];
+	gchar format[MEDIA_CODEC_INI_MAX_STRLEN];
+};
 
-typedef struct {
-    gint codec_id;
-    codec_info_t codec_info[MEDIA_CODEC_MAX_CODEC_ROLE];
-} codec_t;
+struct _codec_t {
+	gint codec_id;
+	codec_info_t codec_info[MEDIA_CODEC_MAX_CODEC_ROLE];
+};
 
 
 /* @ mark means the item has tested */
-typedef struct __mc_ini {
-    port_mode port_type;
-    /* general */
-    gchar port_name[MEDIA_CODEC_INI_MAX_STRLEN];
-    codec_t  codec[MEDIA_CODEC_MAX_CODEC_TYPE];
-} mc_ini_t;
+struct _mc_ini_t {
+	int codec_list;
+	port_mode port_type;
+	/* general */
+	gchar port_name[MEDIA_CODEC_INI_MAX_STRLEN];
+	codec_t  codec[MEDIA_CODEC_MAX_CODEC_TYPE];
+};
 
 /*Default sink ini values*/
 /* General*/
@@ -68,7 +80,7 @@ typedef struct __mc_ini {
 /* FIXIT : need smarter way to generate default ini file. */
 /* FIXIT : finally, it should be an external file */
 #define MEDIA_CODEC_DEFAULT_INI \
-    "\
+"\
 [general] \n\
 \n\
 ;Add general config parameters here\n\
@@ -96,6 +108,8 @@ media_codec_port = GST_PORT \n\
 "
 
 int mc_ini_load(mc_ini_t *ini);
+media_format_mimetype_e _mc_convert_media_format_str_to_int(char *sformat);
+
 
 #ifdef __cplusplus
 }

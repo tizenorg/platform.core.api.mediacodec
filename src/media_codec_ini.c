@@ -48,11 +48,6 @@
 
 #define CNAME_SIZE 512
 
-typedef struct {
-	gchar cname[MEDIA_CODEC_INI_MAX_STRLEN];
-	mediacodec_codec_type_e ctype;
-} codec_list_t;
-
 static codec_list_t general_codec_list[] = {
 	{"h261", MEDIACODEC_H261},
 	{"h263", MEDIACODEC_H263},
@@ -302,7 +297,10 @@ int mc_ini_load(mc_ini_t *ini)
 	int i = 0;
 	dictionary *dict = NULL;
 
-	static const int codec_list = sizeof(general_codec_list) / sizeof(general_codec_list[0]);
+	/* get ini values */
+	memset(ini, 0, sizeof(mc_ini_t));
+
+	ini->codec_list = sizeof(general_codec_list) / sizeof(general_codec_list[0]);
 
 	_mc_ini_check_ini_status();
 
@@ -325,14 +323,12 @@ int mc_ini_load(mc_ini_t *ini)
 #endif
 	}
 
-	/* get ini values */
-	memset(ini, 0, sizeof(mc_ini_t));
 
 	if (dict) {/* if dict is available */
 		/* general */
 		MEDIA_CODEC_INI_GET_STRING(dict, ini->port_name, "port_in_use:media_codec_port", DEFAULT_PORT);
 		/* codec */
-		for (i = 0; i < codec_list; i++) {
+		for (i = 0; i < ini->codec_list; i++) {
 			memset(cname, 0x00, CNAME_SIZE);
 			snprintf(cname, CNAME_SIZE, "%s", general_codec_list[i].cname);
 			int len = strlen(cname);
@@ -351,7 +347,7 @@ int mc_ini_load(mc_ini_t *ini)
 		LOGW("failed to load ini. using hardcoded default\n");
 		/* general */
 		snprintf(ini->port_name, sizeof(ini->port_name), "%s", DEFAULT_PORT);
-		for (i = 0; i < codec_list; i++) {
+		for (i = 0; i < ini->codec_list; i++) {
 			MEDIA_CODEC_GET_DEFAULT_LIST(ini->codec[i].codec_info[0].name,   DEFAULT_HW_DECODER_NAME);
 			MEDIA_CODEC_GET_DEFAULT_LIST(ini->codec[i].codec_info[0].mime,   DEFAULT_HW_DECODER_MIME);
 			MEDIA_CODEC_GET_DEFAULT_LIST(ini->codec[i].codec_info[0].format, DEFAULT_HW_DECODER_FORMAT);
@@ -379,7 +375,7 @@ int mc_ini_load(mc_ini_t *ini)
 	}
 	LOGD("The port is set to [%s] [%d]\n", ini->port_name, ini->port_type);
 
-	for (i = 0; i < codec_list; i++) {
+	for (i = 0; i < ini->codec_list; i++) {
 		memset(cname, 0x00, CNAME_SIZE);
 		snprintf(cname, CNAME_SIZE, "%s", general_codec_list[i].cname);
 		int len = strlen(cname);
@@ -449,100 +445,4 @@ static gboolean _generate_default_ini(void)
 	return TRUE;
 }
 #endif
-
-void _mc_create_decoder_map_from_ini(mc_handle_t *mediacodec)
-{
-	int indx = 0, count = 0;
-	int codec_list = sizeof(general_codec_list) / sizeof(general_codec_list[0]);
-	for (indx = 0; indx < codec_list; indx++) {
-		if (strcmp(mediacodec->ini.codec[indx].codec_info[0].name, "")) {
-			mediacodec->decoder_map[count].id = mediacodec->ini.codec[indx].codec_id;
-			mediacodec->decoder_map[count].hardware = 1; /* hardware */
-			mediacodec->decoder_map[count].type.factory_name = mediacodec->ini.codec[indx].codec_info[0].name;
-			mediacodec->decoder_map[count].type.mime = mediacodec->ini.codec[indx].codec_info[0].mime;
-			mediacodec->decoder_map[count].type.out_format =
-				_mc_convert_media_format_str_to_int(mediacodec->ini.codec[indx].codec_info[0].format);
-			count++;
-		}
-
-		if (strcmp(mediacodec->ini.codec[indx].codec_info[2].name, "")) {
-			mediacodec->decoder_map[count].id = mediacodec->ini.codec[indx].codec_id;
-			mediacodec->decoder_map[count].hardware = 0; /* software */
-			mediacodec->decoder_map[count].type.factory_name = mediacodec->ini.codec[indx].codec_info[2].name;
-			mediacodec->decoder_map[count].type.mime = mediacodec->ini.codec[indx].codec_info[2].mime;
-			mediacodec->decoder_map[count].type.out_format =
-				_mc_convert_media_format_str_to_int(mediacodec->ini.codec[indx].codec_info[2].format);
-			count++;
-		}
-	}
-	mediacodec->num_supported_decoder = count;
-	return;
-
-}
-
-void _mc_create_encoder_map_from_ini(mc_handle_t *mediacodec)
-{
-	int indx = 0, count = 0;
-	int codec_list = sizeof(general_codec_list) / sizeof(general_codec_list[0]);
-
-	for (indx = 0; indx < codec_list; indx++) {
-		if (strcmp(mediacodec->ini.codec[indx].codec_info[1].name, "")) {
-			mediacodec->encoder_map[count].id = mediacodec->ini.codec[indx].codec_id;
-			mediacodec->encoder_map[count].hardware = 1;
-			mediacodec->encoder_map[count].type.factory_name = mediacodec->ini.codec[indx].codec_info[1].name;
-			mediacodec->encoder_map[count].type.mime = mediacodec->ini.codec[indx].codec_info[1].mime;
-			mediacodec->encoder_map[count].type.out_format =
-				_mc_convert_media_format_str_to_int(mediacodec->ini.codec[indx].codec_info[1].format);
-			count++;
-		}
-
-		if (strcmp(mediacodec->ini.codec[indx].codec_info[3].name, "")) {
-			mediacodec->encoder_map[count].id = mediacodec->ini.codec[indx].codec_id;
-			mediacodec->encoder_map[count].hardware = 0;
-			mediacodec->encoder_map[count].type.factory_name = mediacodec->ini.codec[indx].codec_info[3].name;
-			mediacodec->encoder_map[count].type.mime = mediacodec->ini.codec[indx].codec_info[3].mime;
-			mediacodec->encoder_map[count].type.out_format =
-				_mc_convert_media_format_str_to_int(mediacodec->ini.codec[indx].codec_info[3].format);
-			count++;
-		}
-	}
-	mediacodec->num_supported_encoder = count;
-	return;
-
-}
-void _mc_create_codec_map_from_ini(mc_handle_t *mediacodec, mc_codec_spec_t *spec_emul)
-{
-	int indx = 0, count = 0;
-	int codec_list = sizeof(general_codec_list) / sizeof(general_codec_list[0]);
-	for (indx = 0; indx < codec_list; indx++) {
-		if (strcmp(mediacodec->ini.codec[indx].codec_info[0].name, "")) {
-			spec_emul[count].codec_id = mediacodec->ini.codec[indx].codec_id;
-			spec_emul[count].codec_type =  MEDIACODEC_DECODER | MEDIACODEC_SUPPORT_TYPE_HW;
-			spec_emul[count].port_type =  MEDIACODEC_PORT_TYPE_GST;
-			count++;
-		}
-		if (strcmp(mediacodec->ini.codec[indx].codec_info[1].name, "")) {
-			spec_emul[count].codec_id = mediacodec->ini.codec[indx].codec_id;
-			spec_emul[count].codec_type =  MEDIACODEC_ENCODER | MEDIACODEC_SUPPORT_TYPE_HW;
-			spec_emul[count].port_type =  MEDIACODEC_PORT_TYPE_GST;
-			count++;
-		}
-		if (strcmp(mediacodec->ini.codec[indx].codec_info[2].name, "")) {
-			spec_emul[count].codec_id = mediacodec->ini.codec[indx].codec_id;
-			spec_emul[count].codec_type =  MEDIACODEC_DECODER | MEDIACODEC_SUPPORT_TYPE_SW;
-			spec_emul[count].port_type =  MEDIACODEC_PORT_TYPE_GST;
-			count++;
-		}
-		if (strcmp(mediacodec->ini.codec[indx].codec_info[3].name, "")) {
-			spec_emul[count].codec_id = mediacodec->ini.codec[indx].codec_id;
-			spec_emul[count].codec_type =  MEDIACODEC_ENCODER | MEDIACODEC_SUPPORT_TYPE_SW;
-			spec_emul[count].port_type =  MEDIACODEC_PORT_TYPE_GST;
-			count++;
-		}
-	}
-
-	mediacodec->num_supported_codecs = count;
-	return;
-}
-
 #endif /* #ifdef _MEDIA_CODEC_INI_C_ */
