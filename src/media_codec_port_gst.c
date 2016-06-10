@@ -1281,7 +1281,7 @@ int __mc_set_caps_codecdata(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer *bu
 	LOGD("Set caps for codec_data in mime : %s and codec_id (0x%x)", core->mime, core->codec_id);
 
 	/* Add the codec_data attribute to caps, if we have it */
-	codecdata_buffer = gst_buffer_new();
+	codecdata_buffer = gst_buffer_new_and_alloc(codecdata_size);
 	gst_buffer_copy_into(codecdata_buffer, buff->buffer, GST_BUFFER_COPY_MEMORY, 0, codecdata_size);
 	gst_buffer_ref(codecdata_buffer);
 	LOGD("setting codec_data from (packet) buf_data used codecdata_size (%d)", codecdata_size);
