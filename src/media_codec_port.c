@@ -739,7 +739,7 @@ int mc_get_packet_pool(MMHandleType mediacodec, media_packet_pool_h *pool)
 		break;
 
 	case MEDIACODEC_PORT_TYPE_GST:
-        ret = mc_gst_get_packet_pool(mc_handle, pool);
+		ret = mc_gst_get_packet_pool(mc_handle, pool);
 		break;
 
 	default:
