@@ -36,21 +36,23 @@ extern "C" {
 #endif
 
 #define GST_INIT_STRUCTURE(param) \
-    memset(&(param), 0, sizeof(param));
+	memset(&(param), 0, sizeof(param));
 
-#define MEDIACODEC_ELEMENT_SET_STATE( x_element, x_state )                                          \
-    do {                                                                                            \
-        LOGD("setting state [%s:%d] to [%s]\n", #x_state, x_state, GST_ELEMENT_NAME( x_element ) ); \
-        if ( GST_STATE_CHANGE_FAILURE == gst_element_set_state ( x_element, x_state) )              \
-        {                                                                                           \
-            LOGE("failed to set state %s to %s\n", #x_state, GST_ELEMENT_NAME( x_element ));        \
-            goto STATE_CHANGE_FAILED;                                                               \
-        }                                                                                           \
-    } while (0)
+#define MEDIACODEC_ELEMENT_SET_STATE(x_element, x_state)                                          \
+	do {                                                                                            \
+		LOGD("setting state [%s:%d] to [%s]\n", #x_state, x_state, GST_ELEMENT_NAME(x_element)); \
+		if (GST_STATE_CHANGE_FAILURE == gst_element_set_state(x_element, x_state)) {			\
+			LOGE("failed to set state %s to %s\n", #x_state, GST_ELEMENT_NAME(x_element));        \
+			goto STATE_CHANGE_FAILED;                                                               \
+		}                                                                                           \
+	} while (0)
 
 #define SCMN_IMGB_MAX_PLANE 4
 #define TBM_API_CHANGE
 #define DEFAULT_POOL_SIZE 20
+#define AAC_CODECDATA_SIZE	16
+#define WMA_CODECDATA_SIZE	64
+#define VORBIS_CODECDATA_SIZE	4096
 
 /* gst port layer */
 typedef struct _mc_gst_port_t mc_gst_port_t;
@@ -73,8 +75,7 @@ struct ion_mmu_data {
 };
 #endif
 
-struct _mc_gst_port_t
-{
+struct _mc_gst_port_t {
 	mc_gst_core_t *core;
 	unsigned int num_buffers;
 	unsigned int buffer_size;
@@ -86,17 +87,17 @@ struct _mc_gst_port_t
 	GCond buffer_cond;
 };
 
-struct _mc_gst_core_t
-{
+struct _mc_gst_core_t {
 	int(**vtable)();
 	const char *mime;
 	gchar *format;
-	GstElement* pipeline;
-	GstElement* appsrc;
-	GstElement* capsfilter;
-	GstElement* parser;
-	GstElement* fakesink;
-	GstElement* codec;
+	GstElement *pipeline;
+	GstElement *appsrc;
+	GstElement *capsfilter;
+	GstElement *parser;
+	GstElement *fakesink;
+	GstElement *codec;
+	GstCaps *caps;
 	tbm_bufmgr bufmgr;
 	int drm_fd;
 
@@ -143,8 +144,7 @@ struct _mc_gst_core_t
 	void* user_data[_MEDIACODEC_EVENT_TYPE_NUM];
 };
 
-struct _GstMCBuffer
-{
+struct _GstMCBuffer {
 	GstBuffer *buffer;
 	int buf_size;
 	mc_gst_core_t* core;
@@ -152,11 +152,10 @@ struct _GstMCBuffer
 	bool has_imgb;
 };
 
-enum { fill_inbuf, fill_outbuf, create_caps };
+enum { fill_inbuf, fill_outbuf };
 
 int __mc_fill_input_buffer(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *buff);
 int __mc_fill_output_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt);
-int __mc_create_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, bool codec_config);
 
 int __mc_fill_input_buffer_with_packet(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *buff);
 int __mc_fill_input_buffer_with_venc_packet(mc_gst_core_t *core, media_packet_h pkt, GstMCBuffer *mc_buffer);
@@ -165,31 +164,6 @@ int __mc_fill_packet_with_output_buffer(mc_gst_core_t *core, void *data, int siz
 int __mc_fill_venc_packet_with_output_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *out_pkt);
 int __mc_fill_vdec_packet_with_output_buffer(mc_gst_core_t *core, void *data, int size, media_packet_h *pkt);
 
-int __mc_vdec_sw_h264_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_vdec_hw_h264_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_venc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_vdec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_vdec_sw_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_vdec_hw_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_vdec_h263_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_vdec_mpeg4_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_h264dec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_aenc_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_adec_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_aenc_aac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_adec_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_adec_aacv12_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_adec_mp3_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_adec_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_adec_amrwb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_aenc_amrnb_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_adec_vorbis_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_adec_flac_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-int __mc_adec_wma_caps(mc_gst_core_t *core, GstCaps **caps, GstMCBuffer* buff, gboolean codec_config);
-
-void _mc_create_codec_map_from_ini(mc_handle_t *mc_handle, mc_codec_spec_t *spec_emul);
-void _mc_create_decoder_map_from_ini(mc_handle_t *mc_handle);
-void _mc_create_encoder_map_from_ini(mc_handle_t *mc_handle);
 mc_gst_core_t *mc_gst_core_new();
 void mc_gst_core_free(mc_gst_core_t *core);
 

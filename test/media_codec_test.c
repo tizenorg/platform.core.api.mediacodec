@@ -129,8 +129,8 @@ struct _App {
 
 	int codecid;
 	int flag;
-	bool is_video[MAX_HANDLE];
-	bool is_encoder[MAX_HANDLE];
+	bool is_video;
+	bool is_encoder;
 	bool hardware;
 	bool enable_dump;
 	int frame;
@@ -821,6 +821,7 @@ int  _mediacodec_set_codec(App *app, int codecid, int flag, bool *hardware)
 	media_format_mimetype_e mime = 0;
 	encoder = GET_IS_ENCODER(flag) ? 1 : 0;
 	*hardware = GET_IS_HW(flag) ? 1 : 0;
+	app->is_encoder = encoder;
 
 	switch (codecid) {
 	case MEDIACODEC_H264:
@@ -1027,7 +1028,6 @@ static gboolean read_data(App *app)
 #ifdef USE_POOL
 		if (media_packet_pool_acquire_packet(pkt_pool, &pkt, -1) != MEDIA_PACKET_ERROR_NONE) {
 			fprintf(stderr, "media_packet_pool_aquire_packet failed\n");
-			//return TRUE;
 			return FALSE;
 		}
 #else
@@ -1253,8 +1253,7 @@ static void _mediacodec_prepare(App *app, bool frame_all)
 
 
 /* get packet pool instance */
-        ret = mediacodec_get_packet_pool(app->mc_handle[0], &pkt_pool);
-
+	ret = mediacodec_get_packet_pool(app->mc_handle[0], &pkt_pool);
 	if (ret != MEDIA_PACKET_ERROR_NONE) {
 		g_print("mediacodec_get_packet_pool failed\n");
 		return;
@@ -1357,7 +1356,7 @@ void _interpret_main_menu(char *cmd, App *app)
 		else if (strncmp(cmd, "dt", 2) == 0)
 			_mediacodec_destroy(app);
 		else if (strncmp(cmd, "dp", 2) == 0) {
-			if(!app->enable_dump) {
+			if (!app->enable_dump) {
 				app->enable_dump = TRUE;
 				g_print("dump enabled\n");
 			} else {
@@ -1648,7 +1647,6 @@ int main(int argc, char *argv[])
 	displaymenu();
 	app->loop = g_main_loop_new(NULL, TRUE);
 	app->timer = g_timer_new();
-	//app->frame_count = 0;
 	g_main_loop_run(app->loop);
 
 
@@ -1749,35 +1747,36 @@ static void decoder_output_dump(App *app, media_packet_h pkt)
  *  This is needed as MediaCodec encoder generates a packet of raw AAC data.
  *  Note the packetLen must count in the ADTS header itself.
  **/
-void add_adts_header_for_aacenc(App *app, char *buffer, int packetLen) {
-    int profile = 2;    //AAC LC (0x01)
-    int freqIdx = 3;    //48KHz (0x03)
-    int chanCfg = 2;    //CPE (0x02)
+void add_adts_header_for_aacenc(App *app, char *buffer, int packetLen)
+{
+	int profile = 2;    /* AAC LC (0x01) */
+	int freqIdx = 3;    /* 48KHz (0x03) */
+	int chanCfg = 2;    /* CPE (0x02) */
 
-    if (app->samplerate == 96000) freqIdx = 0;
-    else if (app->samplerate == 88200) freqIdx = 1;
-    else if (app->samplerate == 64000) freqIdx = 2;
-    else if (app->samplerate == 48000) freqIdx = 3;
-    else if (app->samplerate == 44100) freqIdx = 4;
-    else if (app->samplerate == 32000) freqIdx = 5;
-    else if (app->samplerate == 24000) freqIdx = 6;
-    else if (app->samplerate == 22050) freqIdx = 7;
-    else if (app->samplerate == 16000) freqIdx = 8;
-    else if (app->samplerate == 12000) freqIdx = 9;
-    else if (app->samplerate == 11025) freqIdx = 10;
-    else if (app->samplerate == 8000) freqIdx = 11;
+	if (app->samplerate == 96000) freqIdx = 0;
+	else if (app->samplerate == 88200) freqIdx = 1;
+	else if (app->samplerate == 64000) freqIdx = 2;
+	else if (app->samplerate == 48000) freqIdx = 3;
+	else if (app->samplerate == 44100) freqIdx = 4;
+	else if (app->samplerate == 32000) freqIdx = 5;
+	else if (app->samplerate == 24000) freqIdx = 6;
+	else if (app->samplerate == 22050) freqIdx = 7;
+	else if (app->samplerate == 16000) freqIdx = 8;
+	else if (app->samplerate == 12000) freqIdx = 9;
+	else if (app->samplerate == 11025) freqIdx = 10;
+	else if (app->samplerate == 8000) freqIdx = 11;
 
-    if ((app->channel == 1) || (app->channel == 2))
-        chanCfg = app->channel;
+	if ((app->channel == 1) || (app->channel == 2))
+		chanCfg = app->channel;
 
-    // fill in ADTS data
-    buffer[0] = (char)0xFF;
-    buffer[1] = (char)0xF1;
-    buffer[2] = (char)(((profile-1)<<6) + (freqIdx<<2) +(chanCfg>>2));
-    buffer[3] = (char)(((chanCfg&3)<<6) + (packetLen>>11));
-    buffer[4] = (char)((packetLen&0x7FF) >> 3);
-    buffer[5] = (char)(((packetLen&7)<<5) + 0x1F);
-    buffer[6] = (char)0xFC;
+	/* fill in ADTS data */
+	buffer[0] = (char)0xFF;
+	buffer[1] = (char)0xF1;
+	buffer[2] = (char)(((profile-1)<<6) + (freqIdx<<2) +(chanCfg>>2));
+	buffer[3] = (char)(((chanCfg&3)<<6) + (packetLen>>11));
+	buffer[4] = (char)((packetLen&0x7FF) >> 3);
+	buffer[5] = (char)(((packetLen&7)<<5) + 0x1F);
+	buffer[6] = (char)0xFC;
 }
 
 static void output_dump(App *app, media_packet_h pkt)
@@ -1796,13 +1795,13 @@ static void output_dump(App *app, media_packet_h pkt)
 	media_packet_get_buffer_size(pkt, &buf_size);
 	g_print("output data : %p, size %d\n", temp, (int)buf_size);
 
-	if (buf_size > 0 && app->codecid == MEDIACODEC_AAC_LC) {
+	if (app->is_encoder && buf_size > 0 && app->codecid == MEDIACODEC_AAC_LC) {
 		add_adts_header_for_aacenc(app, adts, (buf_size + ADTS_HEADER_SIZE));
 		fwrite(&adts, 1, ADTS_HEADER_SIZE, fp);
 		g_print("adts appended\n");
-	} else if (buf_size > 0 && app->codecid == MEDIACODEC_AMR_NB && write_amr_header == 1)	{
+	} else if (app->is_encoder && buf_size > 0 && app->codecid == MEDIACODEC_AMR_NB && write_amr_header == 1)	{
 		/* This is used only AMR encoder case for adding AMR masic header in only first frame */
-		g_print("%s - AMR_header write in first frame\n",__func__);
+		g_print("%s - AMR_header write in first frame\n", __func__);
 		fwrite(&AMR_header[0], 1, sizeof(AMR_header)   - 1, fp);         /* AMR-NB magic number */
 		write_amr_header = 0;
 	}

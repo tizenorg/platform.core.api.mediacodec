@@ -21,34 +21,31 @@
 #include <stdlib.h>
 #include <glib.h>
 #include <tizen.h>
-//#include <mm_types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum
-{
-    CODEC_RET_SUCCESS         =  0,
-    CODEC_RET_FAIL            = -1,
-    CODEC_RET_NOT_SUPPORT     = -2,
-    CODEC_RET_INVALID_ARG     = -3,
-    CODEC_RET_INVALID_CONFIG  = -4,
-    CODEC_RET_CORRUPTED_BS    = -5,
-    CODEC_RET_SMALL_IMG_BUF   = -6,
-    CODEC_RET_HW_ERROR        = -7,
-    CODEC_RET_NOT_AVAILABLE   = -8,
-    CODEC_RET_NOT_EXPECTED    = -9,
-    CODEC_RET_UNKNOWN_ERR     = -100,
+typedef enum {
+	CODEC_RET_SUCCESS         =  0,
+	CODEC_RET_FAIL            = -1,
+	CODEC_RET_NOT_SUPPORT     = -2,
+	CODEC_RET_INVALID_ARG     = -3,
+	CODEC_RET_INVALID_CONFIG  = -4,
+	CODEC_RET_CORRUPTED_BS    = -5,
+	CODEC_RET_SMALL_IMG_BUF   = -6,
+	CODEC_RET_HW_ERROR        = -7,
+	CODEC_RET_NOT_AVAILABLE   = -8,
+	CODEC_RET_NOT_EXPECTED    = -9,
+	CODEC_RET_UNKNOWN_ERR     = -100,
 } CodecRet;
 
 typedef struct _mc_sem_t mc_sem_t;
 
-struct _mc_sem_t
-{
-    GCond cond;
-    GMutex mutex;
-    int counter;
+struct _mc_sem_t {
+	GCond cond;
+	GMutex mutex;
+	int counter;
 };
 
 mc_sem_t *mc_sem_new();
@@ -59,9 +56,9 @@ void mc_sem_up(mc_sem_t *sem);
 void mc_hex_dump(char *desc, void *addr, int len);
 
 #define MC_FREEIF(x) \
-if ( x ) \
-    g_free( x ); \
-x = NULL;
+	if (x) \
+		g_free(x); \
+	x = NULL;
 
 #ifdef __cplusplus
 }

@@ -24,37 +24,29 @@ extern "C" {
 #endif
 
 typedef struct _async_queue {
-    GMutex mutex;
-    GCond condition;
-    GList *head;
-    GList *tail;
-    guint length;
-    gboolean enabled;
+	GMutex mutex;
+	GCond condition;
+	GList *head;
+	GList *tail;
+	guint length;
+	gboolean enabled;
 } async_queue_t;
 
 typedef struct _mc_aqueue {
-    GThread *thread;
-    gint running;
-    async_queue_t *input;
-    async_queue_t *output;
+	GThread *thread;
+	gint running;
+	async_queue_t *input;
+	async_queue_t *output;
 } mc_aqueue_t;
 
 async_queue_t *mc_async_queue_new();
-
 void mc_async_queue_free(async_queue_t *async_queue);
-
 void mc_async_queue_push(async_queue_t *async_queue, gpointer data);
-
-gpointer mc_async_queue_pop_forced (async_queue_t * async_queue);
-
+gpointer mc_async_queue_pop_forced(async_queue_t *async_queue);
 gpointer mc_async_queue_pop(async_queue_t *async_queue);
-
-void mc_async_queue_disable (async_queue_t *async_queue);
-
-void mc_async_queue_enable (async_queue_t *async_queue);
-
+void mc_async_queue_disable(async_queue_t *async_queue);
+void mc_async_queue_enable(async_queue_t *async_queue);
 void mc_async_queue_flush(async_queue_t *async_queue);
-
 gboolean mc_async_queue_is_empty(async_queue_t *async_queue);
 
 #ifdef __cplusplus

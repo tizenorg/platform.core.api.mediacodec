@@ -23,32 +23,29 @@ extern "C" {
 
 #include <media_codec_private.h>
 
-enum { DECODER, ENCODER };
-enum { SOFTWARE, HARDWARE };
+enum {DECODER, ENCODER};
+enum {SOFTWARE, HARDWARE};
 
 typedef struct _mc_codec_spec_t mc_codec_spec_t;
 typedef struct _mc_codec_map_t mc_codec_map_t;
 typedef struct _mc_codec_type_t mc_codec_type_t;
 
-struct _mc_codec_spec_t
-{
-    mediacodec_codec_type_e codec_id;
-    mediacodec_support_type_e codec_type;
-    mediacodec_port_type_e port_type;
+struct _mc_codec_spec_t {
+	mediacodec_codec_type_e codec_id;
+	mediacodec_support_type_e codec_type;
+	mediacodec_port_type_e port_type;
 };
 
-struct _mc_codec_type_t
-{
-    char *factory_name;
-    char *mime;
-    media_format_mimetype_e out_format;
+struct _mc_codec_type_t {
+	char *factory_name;
+	char *mime;
+	media_format_mimetype_e out_format;
 };
 
-struct _mc_codec_map_t
-{
-    mediacodec_codec_type_e id;
-    bool hardware;
-    mc_codec_type_t type;
+struct _mc_codec_map_t {
+	mediacodec_codec_type_e id;
+	bool hardware;
+	mc_codec_type_t type;
 };
 
 

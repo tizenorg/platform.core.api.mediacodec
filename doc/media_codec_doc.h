@@ -39,4 +39,4 @@
  *
  */
 
-#endif // __TIZEN_MEDIA_CODEC_DOC_H__
+#endif /* __TIZEN_MEDIA_CODEC_DOC_H__ */

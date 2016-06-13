@@ -48,89 +48,85 @@ typedef struct mediacodec_s *mediacodec_h;
  * @remarks If this codec is to be used as an encoder or decoder, the codec flag must be set to #MEDIACODEC_ENCODER or
  *          #MEDIACODEC_DECODER. If user doesn't set optional flag, default flags will be set to #MEDIACODEC_SUPPORT_TYPE_SW.
  */
-typedef enum
-{
-    MEDIACODEC_ENCODER          = 0x1,      /**< This flag is for using the encoder */
-    MEDIACODEC_DECODER          = 0x2,      /**< This flag is for using the decoder */
-    MEDIACODEC_SUPPORT_TYPE_HW  = 0x4,      /**< This is an optional flag for using the h/w codec */
-    MEDIACODEC_SUPPORT_TYPE_SW  = 0x8,      /**< This is an optional flag for using the s/w codec */
+typedef enum {
+	MEDIACODEC_ENCODER          = 0x1,      /**< This flag is for using the encoder */
+	MEDIACODEC_DECODER          = 0x2,      /**< This flag is for using the decoder */
+	MEDIACODEC_SUPPORT_TYPE_HW  = 0x4,      /**< This is an optional flag for using the h/w codec */
+	MEDIACODEC_SUPPORT_TYPE_SW  = 0x8,      /**< This is an optional flag for using the s/w codec */
 } mediacodec_support_type_e;
 
 /**
  * @brief Enumerations of  media codec type
  * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  */
-typedef enum
-{
-    MEDIACODEC_NONE         = 0x0,      /**< NONE*/
-    MEDIACODEC_L16          = 0x1010,   /**< L16*/
-    MEDIACODEC_ALAW         = 0x1020,   /**< ALAW*/
-    MEDIACODEC_ULAW         = 0x1030,   /**< ULAW*/
-    MEDIACODEC_AMR          = 0x1040,   /**< MEDIACDEC_AMR indicates AMR-NB (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_AMR_NB       = 0x1040,   /**< AMR-NB (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_AMR_WB       = 0x1041,   /**< AMR-WB (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_G729         = 0x1050,   /**< G729*/
-    MEDIACODEC_AAC          = 0x1060,   /**< MEDIACDEC_AAC indicates AAC-LC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_AAC_LC       = 0x1060,   /**< AAC-LC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_AAC_HE       = 0x1061,   /**< HE-AAC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_AAC_HE_PS    = 0x1062,   /**< HE-AAC-PS (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_MP3          = 0x1070,   /**< MP3*/
-    MEDIACODEC_VORBIS       = 0x1080,   /**< VORBIS (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_FLAC         = 0x1090,   /**< FLAC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_WMAV1        = 0x10A0,   /**< WMA version 1 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_WMAV2        = 0x10A1,   /**< WMA version 2  (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_WMAPRO       = 0x10A2,   /**< WMA Professional (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_WMALSL       = 0x10A3,   /**< WMA Lossless (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+typedef enum {
+	MEDIACODEC_NONE         = 0x0,      /**< NONE*/
+	MEDIACODEC_L16          = 0x1010,   /**< L16*/
+	MEDIACODEC_ALAW         = 0x1020,   /**< ALAW*/
+	MEDIACODEC_ULAW         = 0x1030,   /**< ULAW*/
+	MEDIACODEC_AMR          = 0x1040,   /**< MEDIACDEC_AMR indicates AMR-NB (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_AMR_NB       = 0x1040,   /**< AMR-NB (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_AMR_WB       = 0x1041,   /**< AMR-WB (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_G729         = 0x1050,   /**< G729*/
+	MEDIACODEC_AAC          = 0x1060,   /**< MEDIACDEC_AAC indicates AAC-LC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_AAC_LC       = 0x1060,   /**< AAC-LC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_AAC_HE       = 0x1061,   /**< HE-AAC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_AAC_HE_PS    = 0x1062,   /**< HE-AAC-PS (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_MP3          = 0x1070,   /**< MP3*/
+	MEDIACODEC_VORBIS       = 0x1080,   /**< VORBIS (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_FLAC         = 0x1090,   /**< FLAC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_WMAV1        = 0x10A0,   /**< WMA version 1 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_WMAV2        = 0x10A1,   /**< WMA version 2  (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_WMAPRO       = 0x10A2,   /**< WMA Professional (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_WMALSL       = 0x10A3,   /**< WMA Lossless (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
 
-    MEDIACODEC_H261         = 0x2010,   /**< H.261*/
-    MEDIACODEC_H263         = 0x2020,   /**< H.263*/
-    MEDIACODEC_H264         = 0x2030,   /**< H.264*/
-    MEDIACODEC_MJPEG        = 0x2040,   /**< MJPEG*/
-    MEDIACODEC_MPEG1        = 0x2050,   /**< MPEG1*/
-    MEDIACODEC_MPEG2        = 0x2060,   /**< MPEG2*/
-    MEDIACODEC_MPEG4        = 0x2070,   /**< MPEG4*/
-    MEDIACODEC_HEVC         = 0x2080,   /**< HEVC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_VP8          = 0x2090,   /**< VP8 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_VP9          = 0x20A0,   /**< VP9 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_VC1          = 0x20B0,   /**< VC1 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_H261         = 0x2010,   /**< H.261*/
+	MEDIACODEC_H263         = 0x2020,   /**< H.263*/
+	MEDIACODEC_H264         = 0x2030,   /**< H.264*/
+	MEDIACODEC_MJPEG        = 0x2040,   /**< MJPEG*/
+	MEDIACODEC_MPEG1        = 0x2050,   /**< MPEG1*/
+	MEDIACODEC_MPEG2        = 0x2060,   /**< MPEG2*/
+	MEDIACODEC_MPEG4        = 0x2070,   /**< MPEG4*/
+	MEDIACODEC_HEVC         = 0x2080,   /**< HEVC (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_VP8          = 0x2090,   /**< VP8 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_VP9          = 0x20A0,   /**< VP9 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_VC1          = 0x20B0,   /**< VC1 (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
 } mediacodec_codec_type_e;
 
 /**
  * @brief Enumeration of  media codec error
  * @since_tizen @if MOBILE 2.3 @elseif WEARABLE 2.3.1 @endif
  */
-typedef enum
-{
-    MEDIACODEC_ERROR_NONE                       = TIZEN_ERROR_NONE,                     /**< Successful */
-    MEDIACODEC_ERROR_OUT_OF_MEMORY              = TIZEN_ERROR_OUT_OF_MEMORY,            /**< Out of memory */
-    MEDIACODEC_ERROR_INVALID_PARAMETER          = TIZEN_ERROR_INVALID_PARAMETER,        /**< Invalid parameter */
-    MEDIACODEC_ERROR_INVALID_OPERATION          = TIZEN_ERROR_INVALID_OPERATION,        /**< Invalid operation */
-    MEDIACODEC_ERROR_NOT_SUPPORTED_ON_DEVICE    = TIZEN_ERROR_NOT_SUPPORTED,            /**< Not supported */
-    MEDIACODEC_ERROR_PERMISSION_DENIED          = TIZEN_ERROR_PERMISSION_DENIED,        /**< Permission denied */
-    MEDIACODEC_ERROR_INVALID_STATE              = TIZEN_ERROR_MEDIACODEC | 0x01,        /**< Invalid state */
-    MEDIACODEC_ERROR_INVALID_INBUFFER           = TIZEN_ERROR_MEDIACODEC | 0x02,        /**< Invalid input buffer */
-    MEDIACODEC_ERROR_INVALID_OUTBUFFER          = TIZEN_ERROR_MEDIACODEC | 0x03,        /**< Invalid output buffer */
-    MEDIACODEC_ERROR_INTERNAL                   = TIZEN_ERROR_MEDIACODEC | 0x04,        /**< Internal error */
-    MEDIACODEC_ERROR_NOT_INITIALIZED            = TIZEN_ERROR_MEDIACODEC | 0x05,        /**< Not initialized mediacodec */
-    MEDIACODEC_ERROR_INVALID_STREAM             = TIZEN_ERROR_MEDIACODEC | 0x06,        /**< Invalid stream */
-    MEDIACODEC_ERROR_CODEC_NOT_FOUND            = TIZEN_ERROR_MEDIACODEC | 0x07,        /**< Not supported format */
-    MEDIACODEC_ERROR_DECODE                     = TIZEN_ERROR_MEDIACODEC | 0x08,        /**< Error while decoding data */
-    MEDIACODEC_ERROR_NO_FREE_SPACE              = TIZEN_ERROR_MEDIACODEC | 0x09,        /**< Out of storage */
-    MEDIACODEC_ERROR_STREAM_NOT_FOUND           = TIZEN_ERROR_MEDIACODEC | 0x0a,        /**< Cannot find stream */
-    MEDIACODEC_ERROR_NOT_SUPPORTED_FORMAT       = TIZEN_ERROR_MEDIACODEC | 0x0b,        /**< Not supported format */
-    MEDIACODEC_ERROR_BUFFER_NOT_AVAILABLE       = TIZEN_ERROR_MEDIACODEC | 0x0c,        /**< Not available buffer */
-    MEDIACODEC_ERROR_OVERFLOW_INBUFFER          = TIZEN_ERROR_MEDIACODEC | 0x0d,        /**< Overflow input buffer (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
-    MEDIACODEC_ERROR_RESOURCE_OVERLOADED        = TIZEN_ERROR_MEDIACODEC | 0x0e,        /**< Exceed the instance limits (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+typedef enum {
+	MEDIACODEC_ERROR_NONE                       = TIZEN_ERROR_NONE,                     /**< Successful */
+	MEDIACODEC_ERROR_OUT_OF_MEMORY              = TIZEN_ERROR_OUT_OF_MEMORY,            /**< Out of memory */
+	MEDIACODEC_ERROR_INVALID_PARAMETER          = TIZEN_ERROR_INVALID_PARAMETER,        /**< Invalid parameter */
+	MEDIACODEC_ERROR_INVALID_OPERATION          = TIZEN_ERROR_INVALID_OPERATION,        /**< Invalid operation */
+	MEDIACODEC_ERROR_NOT_SUPPORTED_ON_DEVICE    = TIZEN_ERROR_NOT_SUPPORTED,            /**< Not supported */
+	MEDIACODEC_ERROR_PERMISSION_DENIED          = TIZEN_ERROR_PERMISSION_DENIED,        /**< Permission denied */
+	MEDIACODEC_ERROR_INVALID_STATE              = TIZEN_ERROR_MEDIACODEC | 0x01,        /**< Invalid state */
+	MEDIACODEC_ERROR_INVALID_INBUFFER           = TIZEN_ERROR_MEDIACODEC | 0x02,        /**< Invalid input buffer */
+	MEDIACODEC_ERROR_INVALID_OUTBUFFER          = TIZEN_ERROR_MEDIACODEC | 0x03,        /**< Invalid output buffer */
+	MEDIACODEC_ERROR_INTERNAL                   = TIZEN_ERROR_MEDIACODEC | 0x04,        /**< Internal error */
+	MEDIACODEC_ERROR_NOT_INITIALIZED            = TIZEN_ERROR_MEDIACODEC | 0x05,        /**< Not initialized mediacodec */
+	MEDIACODEC_ERROR_INVALID_STREAM             = TIZEN_ERROR_MEDIACODEC | 0x06,        /**< Invalid stream */
+	MEDIACODEC_ERROR_CODEC_NOT_FOUND            = TIZEN_ERROR_MEDIACODEC | 0x07,        /**< Not supported format */
+	MEDIACODEC_ERROR_DECODE                     = TIZEN_ERROR_MEDIACODEC | 0x08,        /**< Error while decoding data */
+	MEDIACODEC_ERROR_NO_FREE_SPACE              = TIZEN_ERROR_MEDIACODEC | 0x09,        /**< Out of storage */
+	MEDIACODEC_ERROR_STREAM_NOT_FOUND           = TIZEN_ERROR_MEDIACODEC | 0x0a,        /**< Cannot find stream */
+	MEDIACODEC_ERROR_NOT_SUPPORTED_FORMAT       = TIZEN_ERROR_MEDIACODEC | 0x0b,        /**< Not supported format */
+	MEDIACODEC_ERROR_BUFFER_NOT_AVAILABLE       = TIZEN_ERROR_MEDIACODEC | 0x0c,        /**< Not available buffer */
+	MEDIACODEC_ERROR_OVERFLOW_INBUFFER          = TIZEN_ERROR_MEDIACODEC | 0x0d,        /**< Overflow input buffer (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
+	MEDIACODEC_ERROR_RESOURCE_OVERLOADED        = TIZEN_ERROR_MEDIACODEC | 0x0e,        /**< Exceed the instance limits (Since @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif)*/
 } mediacodec_error_e;
 
 /**
  * @brief Enumeration of buffer status
  * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  */
-typedef enum
-{
-    MEDIACODEC_NEED_DATA,
-    MEDIACODEC_ENOUGH_DATA
+typedef enum {
+	MEDIACODEC_NEED_DATA,
+	MEDIACODEC_ENOUGH_DATA
 } mediacodec_status_e;
 
 /**
@@ -358,7 +354,7 @@ int mediacodec_unprepare(mediacodec_h mediacodec);
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
  * @retval #MEDIACODEC_ERROR_OVERFLOW_INBUFFER Overflow inputbuffer
  */
-int mediacodec_process_input (mediacodec_h mediacodec, media_packet_h inbuf, uint64_t timeOutUs);
+int mediacodec_process_input(mediacodec_h mediacodec, media_packet_h inbuf, uint64_t timeOutUs);
 
 /**
  * @brief Gets the decoded or encoded packet from the output queue.
@@ -374,7 +370,7 @@ int mediacodec_process_input (mediacodec_h mediacodec, media_packet_h inbuf, uin
  * @retval #MEDIACODEC_ERROR_OUT_OF_MEMORY Out of memory
  * @retval #MEDIACODEC_ERROR_INVALID_OPERATION Invalid operation
  */
-int mediacodec_get_output (mediacodec_h mediacodec, media_packet_h *outbuf, uint64_t timeOutUs);
+int mediacodec_get_output(mediacodec_h mediacodec, media_packet_h *outbuf, uint64_t timeOutUs);
 
 /**
  * @brief Flushes both input and output buffers.
@@ -384,7 +380,7 @@ int mediacodec_get_output (mediacodec_h mediacodec, media_packet_h *outbuf, uint
  * @retval #MEDIACODEC_ERROR_NONE Successful
  * @retval #MEDIACODEC_ERROR_INVALID_PARAMETER Invalid parameter
  */
-int mediacodec_flush_buffers (mediacodec_h mediacodec);
+int mediacodec_flush_buffers(mediacodec_h mediacodec);
 
 /**
  * @brief set empty buffer callback the media codec for process, asynchronously.
