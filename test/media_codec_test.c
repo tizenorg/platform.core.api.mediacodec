@@ -129,8 +129,8 @@ struct _App {
 
 	int codecid;
 	int flag;
-	bool is_video[MAX_HANDLE];
-	bool is_encoder[MAX_HANDLE];
+	bool is_video;
+	bool is_encoder;
 	bool hardware;
 	bool enable_dump;
 	int frame;
@@ -821,6 +821,7 @@ int  _mediacodec_set_codec(App *app, int codecid, int flag, bool *hardware)
 	media_format_mimetype_e mime = 0;
 	encoder = GET_IS_ENCODER(flag) ? 1 : 0;
 	*hardware = GET_IS_HW(flag) ? 1 : 0;
+	app->is_encoder = encoder;
 
 	switch (codecid) {
 	case MEDIACODEC_H264:
@@ -1796,11 +1797,11 @@ static void output_dump(App *app, media_packet_h pkt)
 	media_packet_get_buffer_size(pkt, &buf_size);
 	g_print("output data : %p, size %d\n", temp, (int)buf_size);
 
-	if (buf_size > 0 && app->codecid == MEDIACODEC_AAC_LC) {
+	if (app->is_encoder && buf_size > 0 && app->codecid == MEDIACODEC_AAC_LC) {
 		add_adts_header_for_aacenc(app, adts, (buf_size + ADTS_HEADER_SIZE));
 		fwrite(&adts, 1, ADTS_HEADER_SIZE, fp);
 		g_print("adts appended\n");
-	} else if (buf_size > 0 && app->codecid == MEDIACODEC_AMR_NB && write_amr_header == 1)	{
+	} else if (app->is_encoder && buf_size > 0 && app->codecid == MEDIACODEC_AMR_NB && write_amr_header == 1)	{
 		/* This is used only AMR encoder case for adding AMR masic header in only first frame */
 		g_print("%s - AMR_header write in first frame\n",__func__);
 		fwrite(&AMR_header[0], 1, sizeof(AMR_header)   - 1, fp);         /* AMR-NB magic number */
