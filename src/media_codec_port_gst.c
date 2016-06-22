@@ -2025,6 +2025,7 @@ void __mc_gst_buffer_add(GstElement *element, GstBuffer *buffer, GstPad *pad, gp
 	if (out_pkt) {
 		media_packet_set_extra(out_pkt, buffer);
 		media_packet_set_pts(out_pkt, GST_BUFFER_TIMESTAMP(buffer));
+		media_packet_set_duration(out_pkt, GST_BUFFER_DURATION(buffer));
 
 		if (core->need_codec_data) {
 			media_packet_set_flags(out_pkt, MEDIA_PACKET_CODEC_CONFIG);
@@ -2042,8 +2043,8 @@ void __mc_gst_buffer_add(GstElement *element, GstBuffer *buffer, GstPad *pad, gp
 		g_queue_push_tail(core->ports[1]->queue, out_pkt);
 
 		g_atomic_int_inc(&core->ftb_count);
-		LOGD("dequeued : %d", core->ftb_count);
-		LOGD("GST_BUFFER_TIMESTAMP = %"GST_TIME_FORMAT, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buffer)));
+		LOGD("dq : %d TIMESTAMP = %"GST_TIME_FORMAT " DURATION = %"GST_TIME_FORMAT,
+			core->ftb_count, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buffer)),GST_TIME_ARGS(GST_BUFFER_DURATION(buffer)));
 
 		g_mutex_unlock(&core->ports[1]->mutex);
 
