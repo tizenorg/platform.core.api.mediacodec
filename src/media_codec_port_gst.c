@@ -1881,7 +1881,7 @@ mc_ret_e _mc_gst_create_pipeline(mc_gst_core_t *core, gchar *factory_name)
 			LOGE("fakesink create fail");
 			goto ERROR;
 		}
-		g_object_set(core->fakesink, "enable-last-sample", FALSE, NULL);
+		g_object_set(core->fakesink, "enable-last-sample", TRUE, NULL);
 
 		/*__mc_link_elements(core);*/
 		gst_bin_add_many(GST_BIN(core->pipeline), core->appsrc, core->capsfilter, core->codec, core->fakesink, NULL);
@@ -2044,7 +2044,7 @@ void __mc_gst_buffer_add(GstElement *element, GstBuffer *buffer, GstPad *pad, gp
 
 		g_atomic_int_inc(&core->ftb_count);
 		LOGD("dq : %d TIMESTAMP = %"GST_TIME_FORMAT " DURATION = %"GST_TIME_FORMAT,
-			core->ftb_count, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buffer)),GST_TIME_ARGS(GST_BUFFER_DURATION(buffer)));
+			core->ftb_count, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buffer)), GST_TIME_ARGS(GST_BUFFER_DURATION(buffer)));
 
 		g_mutex_unlock(&core->ports[1]->mutex);
 
